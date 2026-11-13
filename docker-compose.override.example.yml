@@ -40,12 +40,24 @@ services:
       - "traefik.http.routers.exampleGo.rule=Host(`go.example.${DOMAIN}`)"
       - "traefik.http.services.exampleGo.loadbalancer.server.port=9222"
 
+  # Python-проект (FastAPI) с hot reload. Свои зависимости проекта: .venv в его папке, см. README.
+  python:
+    command: sh -c "cd /var/www/example-py && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+    labels:
+      - "devenv.traefik=${COMPOSE_PROJECT_NAME}" # без этой метки traefik контейнер не видит
+      - "traefik.http.routers.examplePy.service=examplePy"
+      - "traefik.http.routers.examplePy.entrypoints=websecure"
+      - "traefik.http.routers.examplePy.tls=true"
+      - "traefik.http.routers.examplePy.rule=Host(`py.example.${DOMAIN}`)"
+      - "traefik.http.services.examplePy.loadbalancer.server.port=8000"
+
   # Чтобы playwright видел проектные домены изнутри сети.
   playwright:
     extra_hosts:
       - "api.example.${DOMAIN}:${SUBNET_PREFIX}.0.100"
       - "example.${DOMAIN}:${SUBNET_PREFIX}.0.100"
       - "go.example.${DOMAIN}:${SUBNET_PREFIX}.0.100"
+      - "py.example.${DOMAIN}:${SUBNET_PREFIX}.0.100"
 
   # Собранный прод-сервис проекта: read-only, без прав, с лимитами.
   # example-prod:

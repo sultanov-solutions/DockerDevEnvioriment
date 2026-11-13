@@ -263,6 +263,25 @@ services:
     networks:
       - local
 
+  python:
+    profiles: ["python"]
+    container_name: ${PYTHON_CONTAINER_NAME}
+    hostname: ${PYTHON_CONTAINER_NAME}
+    restart: unless-stopped
+    build:
+      context: ${PYTHON_PATH}
+    volumes:
+      - ${SITES_PATH}:/var/www
+      - pip_cache:/root/.cache/pip
+    working_dir: /var/www
+    logging: *default-logging
+    environment:
+      PYTHONUNBUFFERED: "1" # логи сразу в docker logs
+      PYTHONDONTWRITEBYTECODE: "1" # без __pycache__ в папках проектов
+    command: sleep infinity # в override: uvicorn проекта с --reload
+    networks:
+      - local
+
   playwright:
     profiles: ["tools"]
     container_name: ${PLAYWRIGHT_CONTAINER_NAME}
@@ -430,6 +449,7 @@ volumes:
   go_mod:
   go_build:
   maven_m2:
+  pip_cache:
   forgejo_data:
   forgejo_config:
   garage_meta:

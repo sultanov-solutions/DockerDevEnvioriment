@@ -1,7 +1,7 @@
 # Docker Dev Environment
 
 Локальное окружение разработки на Docker Compose: один Traefik с HTTPS на локальных доменах,
-общие контейнеры под PHP, Node, Go и Java, базы и вспомогательные сервисы.
+общие контейнеры под PHP, Node, Go, Java и Python, базы и вспомогательные сервисы.
 Запускается одинаково на Linux, macOS и Windows; версии всех образов закреплены.
 
 ## Состав
@@ -17,6 +17,7 @@
 | Node.js + pm2 + pnpm | 26.13.1 LTS, pm2 7.1.2, pnpm 12.18.0 | `node` | роуты приложений |
 | Go + air | 1.27.4, air 1.67.4 | `go` | роуты приложений |
 | Java + Maven | Temurin 25 LTS, Maven 3.9.16 | `java` | роуты приложений |
+| Python + FastAPI + uvicorn | 3.15.2, fastapi 0.162.7, uvicorn 0.54.0 | `python` | роуты приложений |
 | Garage (S3) + WebUI | 2.5.0 / 1.1.0 | `s3` | `https://s3.<DOMAIN>`, `https://garage.<DOMAIN>` |
 | Forgejo | 17.0.1 | `git` | `https://git.<DOMAIN>` |
 | forgejo-mcp | по digest | `git-mcp` | `https://git.<DOMAIN>/_mcp/<ключ>` |
@@ -65,7 +66,7 @@ docker compose up -d --build
 | `Sites/` | код проектов, в контейнерах это `/var/www` | нет |
 | `storage/` | сертификаты, логи PHP, дампы Postgres, вывод Playwright | нет |
 
-Данные Postgres, Redis, MeiliSearch, Garage, Forgejo, Portainer и кэши Go/Maven лежат
+Данные Postgres, Redis, MeiliSearch, Garage, Forgejo, Portainer и кэши Go/Maven/pip лежат
 в именованных томах Docker, а не в `storage/`: так они работают одинаково на любой ОС.
 
 ## Настройка: `.env`
@@ -98,6 +99,7 @@ docker compose up -d --build
 | `node` | node |
 | `go` | go |
 | `java` | java |
+| `python` | python |
 | `s3` | garage, garage-webui |
 | `git` | forgejo |
 | `git-mcp` | forgejo-mcp |
@@ -176,6 +178,33 @@ services:
       - "traefik.http.services.shopGo.loadbalancer.server.port=9222"
 ```
 
+### Python-приложение (общий контейнер `python`)
+
+В образе уже есть `fastapi` и `uvicorn`. В override задать команду и роут; контейнер запускает один проект:
+
+```yaml
+services:
+  python:
+    command: sh -c "cd /var/www/<project> && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+    labels:
+      - "devenv.traefik=${COMPOSE_PROJECT_NAME}"
+      - "traefik.http.routers.shopPy.service=shopPy"
+      - "traefik.http.routers.shopPy.entrypoints=websecure"
+      - "traefik.http.routers.shopPy.tls=true"
+      - "traefik.http.routers.shopPy.rule=Host(`py.shop.${DOMAIN}`)"
+      - "traefik.http.services.shopPy.loadbalancer.server.port=8000"
+```
+
+Свои зависимости проекта ставятся в `.venv` в его папке, иначе они пропадут при пересоздании контейнера:
+
+```sh
+docker compose exec -w /var/www/<project> python python -m venv --system-site-packages .venv
+docker compose exec -w /var/www/<project> python .venv/bin/pip install -r requirements.txt
+```
+
+После этого в команде вместо `uvicorn` писать `.venv/bin/python -m uvicorn`.
+На общей папке без симлинков (vboxsf, диск Windows) добавить к `venv` ключ `--copies`.
+
 ### Проект со своим compose-файлом
 
 Проект с собственным контейнером подключается одной строкой в override:
@@ -223,7 +252,7 @@ WebSocket через Traefik работает без настроек. Dev-се�
 
 На общих папках (vboxsf, диск Windows в WSL) события изменения файлов не приходят, нужен режим опроса:
 `WATCHPACK_POLLING=true` (next/webpack), `CHOKIDAR_USEPOLLING=true`,
-`server.watch.usePolling` (vite), `poll = true` в `.air.toml` (air).
+`server.watch.usePolling` (vite), `poll = true` в `.air.toml` (air), `WATCHFILES_FORCE_POLLING=true` (uvicorn).
 
 ## Сертификаты
 
@@ -287,7 +316,7 @@ Chromium и Node в контейнере доверяют локальному �
 
 | Платформа | Что учесть |
 |---|---|
-| Linux | Работает как есть. Контейнеры `node`, `go`, `java` работают от root: созданные ими файлы в `Sites/` принадлежат root |
+| Linux | Работает как есть. Контейнеры `node`, `go`, `java`, `python` работают от root: созданные ими файлы в `Sites/` принадлежат root |
 | Linux в VirtualBox, код на vboxsf | `SHARED_GID` = gid группы `vboxsf` (`init.sh` определяет сам). Нужен режим опроса для hot reload |
 | macOS (Docker Desktop) | Работает как есть, включая Apple Silicon: у всех образов есть сборка arm64 |
 | Windows | Окружение и код держать внутри WSL, не на диске `C:`. Иначе: медленно, нет симлинков, нужен режим опроса |
