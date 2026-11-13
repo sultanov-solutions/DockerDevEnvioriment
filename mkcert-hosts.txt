@@ -1,0 +1,8 @@
+# Хосты для локального сертификата, по одному в строке. Домен = DOMAIN из .env.
+traefik.alp
+portainer.alp
+redis.alp
+meilisearch.alp
+git.alp
+s3.alp
+garage.alp

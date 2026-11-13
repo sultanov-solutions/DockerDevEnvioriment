@@ -1,0 +1,436 @@
+x-logging: &default-logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-healthcheck: &default-health-check
+  interval: 30s
+  timeout: 10s
+  retries: 5
+
+# Что поднимать, выбирает COMPOSE_PROFILES в .env. Без профиля работает только traefik.
+# Всё проектное (сайты, роуты, тома node_modules) живёт в docker-compose.override.yml.
+
+services:
+  traefik:
+    image: traefik:v3.7.18
+    container_name: ${TRAEFIK_CONTAINER_NAME}
+    hostname: ${TRAEFIK_CONTAINER_NAME}
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # traefik не роутит контейнеры в статусе starting, в том числе себя (dashboard)
+      start_period: 10s
+      start_interval: 1s
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${TRAEFIK_STORAGE_PATH}/certs:/certs:ro
+      - ${CONTAINERS_ROOT_PATH}/Traefik/dynamic:/dynamic:ro
+    command:
+      - --api.dashboard=true
+      - --providers.docker=true
+      - --providers.docker.network=${NETWORK_NAME}
+      # роутятся только контейнеры с меткой devenv.traefik=<проект>: чужие стеки на этом докере не видны нам,
+      # а чужой traefik не видит нас (метки traefik.enable=true у контейнеров нет)
+      - "--providers.docker.constraints=Label(`devenv.traefik`,`${COMPOSE_PROJECT_NAME:?задайте в .env}`)"
+      - --providers.file.directory=/dynamic/ # Важен слэш в конце
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
+      - --ping=true
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.http.tls=true
+    networks:
+      local:
+        ipv4_address: ${SUBNET_PREFIX}.0.100
+    labels:
+      - "devenv.traefik=${COMPOSE_PROJECT_NAME}"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN}`)"
+
+  # Разовый запуск: docker compose run --rm mkcert
+  mkcert:
+    profiles: ["init"]
+    image: alpine/mkcert@sha256:a8f4f5af61908b4c79c2e9d1e5f23e747f29de174649209ebafcab03d4f6d5fd # версий у образа нет, только latest
+    environment:
+      - CAROOT=/certs
+    volumes:
+      - ${TRAEFIK_STORAGE_PATH}/certs:/certs
+      - ./mkcert-hosts.txt:/hosts.txt:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mkcert -install -key-file /certs/local.key -cert-file /certs/local.crt \
+          $$(sed 's/#.*//' /hosts.txt | tr -d '\r' | xargs) \
+          && chown -R ${USER_ID}:${GROUP_ID} /certs
+
+  portainer:
+    profiles: ["tools"]
+    image: portainer/portainer-ce:2.45.3 # текущий LTS
+    container_name: ${PORTAINER_CONTAINER_NAME}
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - local
+    labels:
+      - "devenv.traefik=${COMPOSE_PROJECT_NAME}"
+      - "traefik.http.routers.pt.service=pt"
+      - "traefik.http.routers.pt.entrypoints=websecure"
+      - "traefik.http.routers.pt.tls=true"
+      - "traefik.http.routers.pt.rule=Host(`portainer.${DOMAIN}`)"
+      - "traefik.http.services.pt.loadbalancer.server.port=9000"
+
+  redis:
+    profiles: ["db"]
+    container_name: ${REDIS_CONTAINER_NAME}
+    hostname: ${REDIS_CONTAINER_NAME}
+    build: ${REDIS_PATH}
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    logging: *default-logging
+    healthcheck:
+      <<: *default-health-check
+      test: ["CMD", "redis-cli", "ping"]
+      start_period: 30s
+    networks:
+      - local
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+  redisinsight:
+    profiles: ["db"]
+    image: redis/redisinsight:3.8.0
+    container_name: ${REDISINSIGHT_CONTAINER_NAME}
+    restart: unless-stopped
+    volumes:
+      - redisinsight_data:/data
+    environment:
+      - RI_ACCEPT_TERMS_AND_CONDITIONS=true
+    networks:
+      - local
+    labels:
+      - "devenv.traefik=${COMPOSE_PROJECT_NAME}"
+      - "traefik.http.routers.redisinsight.service=redisinsight"
+      - "traefik.http.routers.redisinsight.entrypoints=websecure"
+      - "traefik.http.routers.redisinsight.tls=true"
+      - "traefik.http.routers.redisinsight.rule=Host(`redis.${DOMAIN}`)"
+      - "traefik.http.services.redisinsight.loadbalancer.server.port=5540"
+
+  meilisearch:
+    profiles: ["db"]
+    image: getmeili/meilisearch:v1.56.2
+    container_name: ${MEILISEARCH_CONTAINER_NAME}
+    restart: unless-stopped
+    environment:
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
+    volumes:
+      - meili_data:/meili_data
+    logging: *default-logging
+    networks:
+      - local
+    labels:
+      - "devenv.traefik=${COMPOSE_PROJECT_NAME}"
+      - "traefik.http.routers.meilisearch.service=meilisearch"
+      - "traefik.http.routers.meilisearch.entrypoints=websecure"
+      - "traefik.http.routers.meilisearch.tls=true"
+      - "traefik.http.routers.meilisearch.rule=Host(`meilisearch.${DOMAIN}`)"
+      - "traefik.http.services.meilisearch.loadbalancer.server.port=7700"
+
+  postgres:
+    profiles: ["db"]
+    container_name: ${PGSQL_CONTAINER_NAME}
+    hostname: ${PGSQL_CONTAINER_NAME}
+    restart: unless-stopped
+    build: ${PGSQL_PATH}
+    ports:
+      - "${PGSQL_PORT:-5432}:5432"
+    volumes:
+      - pgsql_data:/var/lib/postgresql/data
+      - ${PGSQL_STORAGE_PATH}/init:/docker-entrypoint-initdb.d
+      - ${PGSQL_STORAGE_PATH}/tmp:/var/tmp-l # обмен дампами с хостом
+    environment:
+      - POSTGRES_USER=${PGSQL_ROOT_USER}
+      - POSTGRES_PASSWORD=${PGSQL_ROOT_PASSWORD}
+    logging: *default-logging
+    healthcheck:
+      <<: *default-health-check
+      test: ["CMD-SHELL", "pg_isready -U ${PGSQL_ROOT_USER}"]
+      start_period: 30s
+    networks:
+      - local
+
+  node:
+    profiles: ["node"]
+    container_name: ${NODEJS_CONTAINER_NAME}
+    hostname: ${NODEJS_CONTAINER_NAME}
+    build: ${NODEJS_PATH}
+    restart: unless-stopped
+    volumes:
+      - ${SITES_PATH}:/var/www
+      - ${NODEJS_PATH}/pm2-loader.cjs:/var/pm2-loader/ecosystem.config.cjs
+    tty: true
+    working_dir: /var/www
+    logging: *default-logging
+    networks:
+      - local
+    command:
+      - sh
+      - -c
+      - "cd /var/pm2-loader && pm2-runtime start ecosystem.config.cjs"
+
+  php85:
+    profiles: ["php"]
+    container_name: ${PHP85_CONTAINER_NAME}
+    hostname: ${PHP85_CONTAINER_NAME}
+    restart: unless-stopped
+    group_add:
+      - "${SHARED_GID}" # группа-владелец общих папок (Hosts, Sites), напр. vboxsf
+    build:
+      context: ${PHP85_PATH}
+      args:
+        USER_ID: ${USER_ID}
+        GROUP_ID: ${GROUP_ID}
+    volumes:
+      - ${SITES_PATH}:/var/www
+      - ${HOSTS_PATH}:/etc/nginx/conf.d
+      - ${PHP_STORAGE_PATH}/php85/logs/nginx:/var/log/nginx
+      - ${PHP_STORAGE_PATH}/php85/logs/php:/var/log/php85
+      - ${PHP_STORAGE_PATH}/php85/supervisor:/etc/supervisor/custom.d
+    working_dir: /var/www
+    logging: *default-logging
+    healthcheck:
+      <<: *default-health-check
+      start_period: 30s
+    environment:
+      - COMPOSER_CACHE_DIR=/var/www/.composer_cache
+    command: >
+      sh -c "chown -R nginx:nginx /var/lib/nginx /var/log/nginx /var/log/php85 /run &&
+             /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf"
+    networks:
+      - local
+
+  go:
+    profiles: ["go"]
+    container_name: ${GO_CONTAINER_NAME}
+    hostname: ${GO_CONTAINER_NAME}
+    restart: unless-stopped
+    group_add:
+      - "${SHARED_GID}"
+    build:
+      context: ${GO_PATH}
+    tty: true
+    command: sleep infinity # в override: sh -c "cd /var/www/<project> && air"
+    environment:
+      GOFLAGS: -buildvcs=false
+    volumes:
+      - ${GO_SITES_PATH}:/var/www
+      - go_mod:/go/pkg/mod
+      - go_build:/root/.cache/go-build
+    working_dir: /var/www
+    logging: *default-logging
+    networks:
+      - local
+
+  java:
+    profiles: ["java"]
+    container_name: ${JAVA_CONTAINER_NAME}
+    hostname: ${JAVA_CONTAINER_NAME}
+    restart: unless-stopped
+    build:
+      context: ${JAVA_PATH}
+    volumes:
+      - ${SITES_PATH}:/var/www
+      - maven_m2:/root/.m2
+    working_dir: /var/www
+    logging: *default-logging
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+    command: sleep infinity # в override: working_dir проекта + mvn spring-boot:run
+    networks:
+      - local
+
+  playwright:
+    profiles: ["tools"]
+    container_name: ${PLAYWRIGHT_CONTAINER_NAME}
+    hostname: ${PLAYWRIGHT_CONTAINER_NAME}
+    build: ${PLAYWRIGHT_PATH}
+    restart: unless-stopped
+    user: "${USER_ID}:${GROUP_ID}"
+    group_add:
+      - "${SHARED_GID}"
+    mem_limit: 1g
+    cpus: ${PLAYWRIGHT_CPUS:-2} # на машине с одним ядром поставить 1
+    environment:
+      HOME: /tmp/home # доступен на запись любому uid
+      NODE_EXTRA_CA_CERTS: /certs/rootCA.pem
+    volumes:
+      - ${PLAYWRIGHT_STORAGE_PATH}:/out
+      # файл появляется после `docker compose run --rm mkcert`; без него docker создаст каталог
+      - ${TRAEFIK_STORAGE_PATH}/certs/rootCA.pem:/certs/rootCA.pem:ro
+    # локальные домены внутри сети ведут на traefik; проектные добавляются в override
+    extra_hosts:
+      - "traefik.${DOMAIN}:${SUBNET_PREFIX}.0.100"
+      - "portainer.${DOMAIN}:${SUBNET_PREFIX}.0.100"
+      - "redis.${DOMAIN}:${SUBNET_PREFIX}.0.100"
+      - "meilisearch.${DOMAIN}:${SUBNET_PREFIX}.0.100"
+      - "git.${DOMAIN}:${SUBNET_PREFIX}.0.100"
+      - "s3.${DOMAIN}:${SUBNET_PREFIX}.0.100"
+      - "garage.${DOMAIN}:${SUBNET_PREFIX}.0.100"
+    working_dir: /out
+    command:
+      - sh
+      - -c
+      - |
+        # Chromium доверяет только своему хранилищу NSS: кладём туда локальный CA
+        mkdir -p $$HOME/.pki/nssdb
+        certutil -d sql:$$HOME/.pki/nssdb -N --empty-password 2>/dev/null
+        certutil -d sql:$$HOME/.pki/nssdb -A -t "C,," -n devenv -i /certs/rootCA.pem \
+          || echo "локальный CA не установлен: сначала docker compose run --rm mkcert"
+        exec sleep infinity
+    logging: *default-logging
+    networks:
+      - local
+
+  forgejo:
+    profiles: ["git"]
+    image: codeberg.org/forgejo/forgejo:17.0.1-rootless
+    container_name: ${FORGEJO_CONTAINER_NAME}
+    hostname: ${FORGEJO_CONTAINER_NAME}
+    restart: unless-stopped
+    environment:
+      FORGEJO__database__DB_TYPE: sqlite3
+      FORGEJO__server__DOMAIN: git.${DOMAIN}
+      FORGEJO__server__ROOT_URL: https://git.${DOMAIN}/
+      FORGEJO__server__HTTP_PORT: 3000
+      FORGEJO__server__DISABLE_SSH: "true"
+      FORGEJO__server__OFFLINE_MODE: "true"
+      FORGEJO__security__INSTALL_LOCK: "true"
+      FORGEJO__service__DISABLE_REGISTRATION: "true"
+      FORGEJO__webhook__ALLOWED_HOST_LIST: private
+      FORGEJO__log__LEVEL: Warn
+    volumes:
+      - forgejo_data:/var/lib/gitea
+      - forgejo_config:/etc/gitea
+    labels:
+      - "devenv.traefik=${COMPOSE_PROJECT_NAME}"
+      - "traefik.http.routers.forgejo.service=forgejo"
+      - "traefik.http.routers.forgejo.entrypoints=websecure"
+      - "traefik.http.routers.forgejo.tls=true"
+      - "traefik.http.routers.forgejo.rule=Host(`git.${DOMAIN}`)"
+      - "traefik.http.services.forgejo.loadbalancer.server.port=3000"
+    networks:
+      - local
+    logging: *default-logging
+
+  # Нужен FORGEJOMCP_TOKEN (токен из Forgejo), поэтому отдельный профиль.
+  forgejo-mcp:
+    profiles: ["git-mcp"]
+    image: ronmi/forgejo-mcp@sha256:dc064b964c2c473310f2d0c7da008223f753224e5c84bf84fe5e268813d43464 # версий у образа нет, только latest
+    container_name: ${FORGEJO_MCP_CONTAINER_NAME}
+    hostname: ${FORGEJO_MCP_CONTAINER_NAME}
+    restart: unless-stopped
+    depends_on:
+      - forgejo
+    command: http --address :8080 --server http://${FORGEJO_CONTAINER_NAME}:3000
+    environment:
+      FORGEJOMCP_TOKEN: ${FORGEJOMCP_TOKEN}
+    labels:
+      - "devenv.traefik=${COMPOSE_PROJECT_NAME}"
+      - "traefik.http.routers.forgejoMcp.service=forgejoMcp"
+      - "traefik.http.routers.forgejoMcp.entrypoints=websecure"
+      - "traefik.http.routers.forgejoMcp.tls=true"
+      - "traefik.http.routers.forgejoMcp.rule=Host(`git.${DOMAIN}`) && PathPrefix(`/_mcp/${GIT_MCP_PATH_KEY}`)"
+      - "traefik.http.routers.forgejoMcp.priority=100"
+      - "traefik.http.routers.forgejoMcp.middlewares=forgejoMcpStrip"
+      - "traefik.http.middlewares.forgejoMcpStrip.stripprefix.prefixes=/_mcp/${GIT_MCP_PATH_KEY}"
+      - "traefik.http.services.forgejoMcp.loadbalancer.server.port=8080"
+    networks:
+      - local
+    logging: *default-logging
+
+  garage:
+    profiles: ["s3"]
+    image: dxflrs/garage:v2.5.0
+    container_name: ${GARAGE_CONTAINER_NAME}
+    hostname: ${GARAGE_CONTAINER_NAME}
+    restart: unless-stopped
+    environment:
+      # секреты из .env, а не из garage.toml: конфиг остаётся в репозитории
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN}
+    volumes:
+      - ${CONTAINERS_ROOT_PATH}/Garage/garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    labels:
+      - "devenv.traefik=${COMPOSE_PROJECT_NAME}"
+      - "traefik.http.routers.garageS3.service=garageS3"
+      - "traefik.http.routers.garageS3.entrypoints=websecure"
+      - "traefik.http.routers.garageS3.tls=true"
+      - "traefik.http.routers.garageS3.rule=Host(`s3.${DOMAIN}`)"
+      - "traefik.http.services.garageS3.loadbalancer.server.port=3900"
+    networks:
+      - local
+    logging: *default-logging
+
+  garage-webui:
+    profiles: ["s3"]
+    image: khairul169/garage-webui:1.1.0
+    container_name: ${GARAGE_CONTAINER_NAME}_WEBUI
+    hostname: ${GARAGE_CONTAINER_NAME}_WEBUI
+    restart: unless-stopped
+    depends_on:
+      - garage
+    environment:
+      API_BASE_URL: http://${GARAGE_CONTAINER_NAME}:3903
+      API_ADMIN_KEY: ${GARAGE_ADMIN_TOKEN}
+      S3_ENDPOINT_URL: http://${GARAGE_CONTAINER_NAME}:3900
+      S3_REGION: garage
+    labels:
+      - "devenv.traefik=${COMPOSE_PROJECT_NAME}"
+      - "traefik.http.routers.garageUi.service=garageUi"
+      - "traefik.http.routers.garageUi.entrypoints=websecure"
+      - "traefik.http.routers.garageUi.tls=true"
+      - "traefik.http.routers.garageUi.rule=Host(`garage.${DOMAIN}`)"
+      - "traefik.http.services.garageUi.loadbalancer.server.port=3909"
+    networks:
+      - local
+    logging: *default-logging
+
+networks:
+  local:
+    name: ${NETWORK_NAME}
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${SUBNET_PREFIX}.0.0/16
+
+# Данные инфраструктуры и кэши: именованные тома, одинаково на любой ОС и без возни с правами.
+# На виду (в storage/) остаётся то, с чем работают руками: сертификаты, логи, дампы, скриншоты.
+volumes:
+  portainer_data:
+  redis_data:
+  redisinsight_data:
+  meili_data:
+  pgsql_data:
+  go_mod:
+  go_build:
+  maven_m2:
+  forgejo_data:
+  forgejo_config:
+  garage_meta:
+  garage_data:

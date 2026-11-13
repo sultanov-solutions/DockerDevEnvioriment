@@ -1,0 +1,78 @@
+# Образец проектного слоя. Скопировать в docker-compose.override.yml (в git не попадает):
+# compose подхватывает его сам и сливает с docker-compose.yml.
+# Каждый новый хост дописывается ещё в mkcert-hosts.txt (и перевыпуск: docker compose run --rm mkcert).
+# Роут = метка devenv.traefik=<проект> на контейнере + метки traefik.http.* с уникальными именами.
+
+services:
+  # PHP-сайт: конфиг nginx в Hosts/<host>.conf слушает свой порт, traefik ведёт на него.
+  php85:
+    labels:
+      - "devenv.traefik=${COMPOSE_PROJECT_NAME}" # без этой метки traefik контейнер не видит
+      - "traefik.http.routers.apiExample.service=apiExample"
+      - "traefik.http.routers.apiExample.entrypoints=websecure"
+      - "traefik.http.routers.apiExample.tls=true"
+      - "traefik.http.routers.apiExample.rule=Host(`api.example.${DOMAIN}`)"
+      - "traefik.http.services.apiExample.loadbalancer.server.port=8095"
+
+  # Node-проект: приложение описывается в Containers/NodeJS/pm2-loader.cjs.
+  node:
+    volumes:
+      # node_modules и .next в томах, а не в папке проекта: симлинки pnpm/turbopack
+      # не работают на общих папках (vboxsf, NTFS), а на Mac так заметно быстрее
+      - example_node_modules:/var/www/example/node_modules
+      - example_next:/var/www/example/.next
+    labels:
+      - "devenv.traefik=${COMPOSE_PROJECT_NAME}" # без этой метки traefik контейнер не видит
+      - "traefik.http.routers.example.service=example"
+      - "traefik.http.routers.example.entrypoints=websecure"
+      - "traefik.http.routers.example.tls=true"
+      - "traefik.http.routers.example.rule=Host(`example.${DOMAIN}`)"
+      - "traefik.http.services.example.loadbalancer.server.port=3000"
+
+  # Go-проект с hot reload.
+  go:
+    command: sh -c "cd /var/www/example-go && air"
+    labels:
+      - "devenv.traefik=${COMPOSE_PROJECT_NAME}" # без этой метки traefik контейнер не видит
+      - "traefik.http.routers.exampleGo.service=exampleGo"
+      - "traefik.http.routers.exampleGo.entrypoints=websecure"
+      - "traefik.http.routers.exampleGo.tls=true"
+      - "traefik.http.routers.exampleGo.rule=Host(`go.example.${DOMAIN}`)"
+      - "traefik.http.services.exampleGo.loadbalancer.server.port=9222"
+
+  # Чтобы playwright видел проектные домены изнутри сети.
+  playwright:
+    extra_hosts:
+      - "api.example.${DOMAIN}:${SUBNET_PREFIX}.0.100"
+      - "example.${DOMAIN}:${SUBNET_PREFIX}.0.100"
+      - "go.example.${DOMAIN}:${SUBNET_PREFIX}.0.100"
+
+  # Собранный прод-сервис проекта: read-only, без прав, с лимитами.
+  # example-prod:
+  #   build:
+  #     context: ${SITES_PATH}/example-go
+  #   restart: unless-stopped
+  #   user: "${USER_ID}:${GROUP_ID}"
+  #   read_only: true
+  #   tmpfs: [/tmp]
+  #   cap_drop: [ALL]
+  #   security_opt: ["no-new-privileges:true"]
+  #   mem_limit: 1g
+  #   cpus: 2
+  #   pids_limit: 256
+  #   networks: [local]
+  #   labels:
+  #     - "devenv.traefik=${COMPOSE_PROJECT_NAME}"
+  #     - "traefik.http.routers.exampleProd.entrypoints=websecure"
+  #     - "traefik.http.routers.exampleProd.tls=true"
+  #     - "traefik.http.routers.exampleProd.rule=Host(`prod.example.${DOMAIN}`)"
+  #     - "traefik.http.services.exampleProd.loadbalancer.server.port=3000"
+
+volumes:
+  example_node_modules:
+  example_next:
+
+# Проект со своим compose-файлом подключается одной строкой; заморозить = закомментировать.
+# Пути внутри такого файла считаются от его папки, сеть общая: networks: [local].
+# include:
+#   - ${SITES_PATH}/example/compose.yml

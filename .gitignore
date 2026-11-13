@@ -1,0 +1,7 @@
+.env
+storage/
+docker-compose.override.yml
+Sites/*
+!Sites/.gitkeep
+Hosts/*.conf
+!Hosts/default.conf
