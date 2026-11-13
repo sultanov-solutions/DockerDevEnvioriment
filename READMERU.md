@@ -18,6 +18,10 @@
 | Redis | 8.10.3 | `db` | `localhost:6379`, в сети `redis:6379` |
 | RedisInsight | 3.8.0 | `db` | `https://redis.<DOMAIN>` |
 | MeiliSearch | 1.56.2 | `db` | `https://meilisearch.<DOMAIN>`, в сети `meilisearch:7700` |
+| MySQL | 9.7.4 LTS | `mysql` | `localhost:3306`, в сети `mysql:3306` |
+| MongoDB | 9.0.8 | `mongo` | `localhost:27017`, в сети `mongo:27017` |
+| RabbitMQ | 4.4.0 | `rabbitmq` | `https://rabbitmq.<DOMAIN>`, AMQP `localhost:5672`, в сети `rabbitmq:5672` |
+| Mailpit | 1.33.1 | `mail` | `https://mail.<DOMAIN>`, SMTP в сети `mailpit:1025` |
 | Garage (S3) + WebUI | 2.5.0 / 1.1.0 | `s3` | `https://s3.<DOMAIN>`, `https://garage.<DOMAIN>` |
 | Forgejo | 17.0.1 | `git` | `https://git.<DOMAIN>` |
 | forgejo-mcp | по digest | `git-mcp` | `https://git.<DOMAIN>/_mcp/<ключ>` |
@@ -42,7 +46,7 @@
 ## Требования
 
 - Docker Engine 25+ и Docker Compose 2.24+ (проверено на Engine 29.9, Compose 5.6).
-- Свободные порты 80, 443, 5432, 6379 (меняются в `.env`).
+- Свободные порты 80, 443 и порты включённых сервисов: 5432, 6379, 3306, 27017, 5672 (меняются в `.env`).
 - Для `init.sh`: любой POSIX shell. На Windows: Git Bash, WSL или ручное заполнение `.env`.
 
 ## Быстрый старт
@@ -79,7 +83,7 @@ docker compose up -d
 | `Sites/` | место для проектов по умолчанию (`SITES_PATH`) | нет |
 | `storage/` | сертификаты, дампы и init-скрипты Postgres | нет |
 
-Данные Postgres, Redis, MeiliSearch, Garage, Forgejo, Portainer и кэши сборки лежат
+Данные всех сервисов (базы, RabbitMQ, Mailpit, Garage, Forgejo, Portainer) и кэши сборки лежат
 в именованных томах Docker, а не в `storage/`: так они работают одинаково на любой ОС.
 
 ## Настройка: `.env`
@@ -88,7 +92,7 @@ docker compose up -d
 |---|---|
 | `COMPOSE_PROFILES` | какие сервисы поднимать и какие образы собирать, через запятую |
 | `DOMAIN` | локальная зона. При смене поправить `mkcert-hosts.txt` и перевыпустить сертификат |
-| `HTTP_PORT`, `HTTPS_PORT`, `PGSQL_PORT`, `REDIS_PORT` | порты на хосте |
+| `HTTP_PORT`, `HTTPS_PORT`, `PGSQL_PORT`, `REDIS_PORT`, `MYSQL_PORT`, `MONGO_PORT`, `RABBITMQ_PORT` | порты на хосте |
 | `COMPOSE_PROJECT_NAME` | имя окружения строчными буквами: префикс томов, сети, образов и значение метки для Traefik |
 | `CONTAINER_PREFIX` | префикс имён контейнеров инфраструктуры (`DEVKIT_REDIS`); пустой, если других стеков на машине нет |
 | `SUBNET_PREFIX` | первые два октета подсети `/16`. `init.sh` подбирает свободную. Traefik всегда на `<SUBNET_PREFIX>.0.100` |
@@ -107,6 +111,10 @@ docker compose up -d
 |---|---|
 | (нет) | traefik |
 | `db` | postgres, redis, redisinsight, meilisearch |
+| `mysql` | mysql |
+| `mongo` | mongo |
+| `rabbitmq` | rabbitmq |
+| `mail` | mailpit |
 | `s3` | garage, garage-webui |
 | `git` | forgejo |
 | `git-mcp` | forgejo-mcp |
@@ -164,7 +172,7 @@ services:
 - **Сеть `local`** и общие тома кэшей (`go_mod`, `go_build`, `maven_m2`, `pip_cache`, `pnpm_store`, `cargo_registry`) объявлены в окружении, повторно объявлять не нужно. Свои тома проект объявляет сам.
 - **Имена** сервисов, томов и роутов уникальны среди подключённых проектов.
 - **Метка `devenv.traefik=${COMPOSE_PROJECT_NAME}`** обязательна: без неё Traefik контейнер не видит.
-- **Сервисы окружения** доступны по именам: `postgres`, `redis`, `meilisearch`, `garage`, `forgejo`.
+- **Сервисы окружения** доступны по именам: `postgres`, `redis`, `meilisearch`, `mysql`, `mongo`, `rabbitmq`, `mailpit`, `garage`, `forgejo`.
 - **Свой Dockerfile** вместо образа окружения: `build: .` вместо `image` и `pull_policy`.
 
 Сервис проекта управляется обычными командами: `docker compose logs -f shop`, `docker compose exec shop sh`,
@@ -227,6 +235,17 @@ docker run --rm -v devkit_forgejo_data:/v -v "$PWD":/b alpine tar xzf /b/forgejo
 **PostgreSQL.** Суперпользователь и пароль: `PGSQL_ROOT_USER`, `PGSQL_ROOT_PASSWORD`.
 Файлы `*.sql` и `*.sh` из `storage/PgSQL/init` выполняются один раз, при создании пустой базы.
 
+**MySQL.** Пользователь `root`, пароль `MYSQL_ROOT_PASSWORD`. Консоль: `docker compose exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD"'`.
+
+**MongoDB.** Администратор: `MONGO_ROOT_USER`, `MONGO_ROOT_PASSWORD`.
+Строка подключения: `mongodb://<user>:<password>@mongo:27017/?authSource=admin`.
+
+**RabbitMQ.** Пользователь и пароль: `RABBITMQ_USER`, `RABBITMQ_PASSWORD`; та же пара открывает веб-панель.
+Строка подключения: `amqp://<user>:<password>@rabbitmq:5672/`.
+
+**Mailpit.** В настройках почты проекта указать SMTP-хост `mailpit`, порт `1025`, без шифрования; логин принимается любой.
+Наружу ничего не уходит: все письма попадают в ящик на `https://mail.<DOMAIN>`.
+
 **Garage.** Один раз назначить раскладку узла, затем создавать ключи и бакеты в `https://garage.<DOMAIN>`:
 
 ```sh
@@ -276,7 +295,7 @@ docker compose exec shop sh               # shell в контейнере
 | Тома, образы, сеть | имена с префиксом `COMPOSE_PROJECT_NAME` |
 | Подсеть | `init.sh` выбирает `172.x.0.0/16`, не занятую другими сетями Docker |
 | Роутинг | Traefik обслуживает только контейнеры с меткой `devenv.traefik=<проект>`. Метки `traefik.enable=true` у контейнеров нет, поэтому чужой Traefik их не подхватывает |
-| Порты хоста | единственное, что делится между стеками. `init.sh` предупреждает, если 80, 443, 5432 или 6379 уже опубликованы другим контейнером; порт меняется в `.env` |
+| Порты хоста | единственное, что делится между стеками. `init.sh` предупреждает, если порт из `.env` уже опубликован другим контейнером; порт меняется в `.env` |
 
 При нестандартном `HTTPS_PORT` адреса получают порт: `https://traefik.alp:8443/dashboard/`.
 
@@ -288,6 +307,6 @@ docker compose exec shop sh               # shell в контейнере
 
 ## Ограничения
 
-- Только для разработки. Traefik и Portainer имеют доступ к сокету Docker; порты Postgres и Redis открыты на всех интерфейсах, Redis без пароля. Не запускать на машине, доступной из недоверенной сети.
+- Только для разработки. Traefik и Portainer имеют доступ к сокету Docker; порты баз и RabbitMQ открыты на всех интерфейсах, Redis без пароля. Не запускать на машине, доступной из недоверенной сети.
 - Системные пакеты образов (`apk`, `apt`) ставятся из репозиториев на момент сборки. Для побитно одинаковых образов на разных машинах собрать один раз и переносить через реестр или `docker save`.
 - Образы рантаймов проверяются на актуальность при каждом `docker compose up` (из кэша это секунды; первая сборка PHP занимает несколько минут).

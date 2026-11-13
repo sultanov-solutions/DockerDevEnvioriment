@@ -46,7 +46,7 @@ mkdir -p \
 
 # Ports already published by containers of other projects: warn, leave .env alone.
 others=$(docker ps --format '{{.Label "com.docker.compose.project"}} {{.Names}} {{.Ports}}' 2>/dev/null | grep -v "^$COMPOSE_PROJECT_NAME " || true)
-for var in HTTP_PORT HTTPS_PORT PGSQL_PORT REDIS_PORT; do
+for var in HTTP_PORT HTTPS_PORT PGSQL_PORT REDIS_PORT MYSQL_PORT MONGO_PORT RABBITMQ_PORT; do
     eval "port=\$$var"
     holder=$(printf '%s\n' "$others" | awk -v p=":$port->" 'index($0, p) { print $2; exit }')
     [ -z "$holder" ] || echo "WARNING: port $port is taken by container $holder, change $var in .env"

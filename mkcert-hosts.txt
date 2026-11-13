@@ -6,3 +6,5 @@ meilisearch.alp
 git.alp
 s3.alp
 garage.alp
+rabbitmq.alp
+mail.alp

@@ -18,6 +18,10 @@ Services:
 | Redis | 8.10.3 | `db` | `localhost:6379`, inside the network `redis:6379` |
 | RedisInsight | 3.8.0 | `db` | `https://redis.<DOMAIN>` |
 | MeiliSearch | 1.56.2 | `db` | `https://meilisearch.<DOMAIN>`, inside the network `meilisearch:7700` |
+| MySQL | 9.7.4 LTS | `mysql` | `localhost:3306`, inside the network `mysql:3306` |
+| MongoDB | 9.0.8 | `mongo` | `localhost:27017`, inside the network `mongo:27017` |
+| RabbitMQ | 4.4.0 | `rabbitmq` | `https://rabbitmq.<DOMAIN>`, AMQP `localhost:5672`, inside the network `rabbitmq:5672` |
+| Mailpit | 1.33.1 | `mail` | `https://mail.<DOMAIN>`, SMTP inside the network `mailpit:1025` |
 | Garage (S3) + WebUI | 2.5.0 / 1.1.0 | `s3` | `https://s3.<DOMAIN>`, `https://garage.<DOMAIN>` |
 | Forgejo | 17.0.1 | `git` | `https://git.<DOMAIN>` |
 | forgejo-mcp | pinned by digest | `git-mcp` | `https://git.<DOMAIN>/_mcp/<key>` |
@@ -42,7 +46,7 @@ and that is also where a service is extended (packages, configs, plugins). After
 ## Requirements
 
 - Docker Engine 25+ and Docker Compose 2.24+ (tested on Engine 29.9, Compose 5.6).
-- Free ports 80, 443, 5432, 6379 (configurable in `.env`).
+- Free ports 80, 443 and the ports of the enabled services: 5432, 6379, 3306, 27017, 5672 (configurable in `.env`).
 - For `init.sh`: any POSIX shell. On Windows: Git Bash, WSL, or fill in `.env` by hand.
 
 ## Quick start
@@ -79,7 +83,7 @@ Without a shell: copy `.env.example` to `.env`, replace every `__GENERATE__` wit
 | `Sites/` | default location for projects (`SITES_PATH`) | no |
 | `storage/` | certificates, Postgres dumps and init scripts | no |
 
-The data of Postgres, Redis, MeiliSearch, Garage, Forgejo and Portainer, and the build caches, live
+The data of all services (databases, RabbitMQ, Mailpit, Garage, Forgejo, Portainer) and the build caches live
 in named Docker volumes rather than in `storage/`, so they behave the same on every OS.
 
 ## Configuration: `.env`
@@ -88,7 +92,7 @@ in named Docker volumes rather than in `storage/`, so they behave the same on ev
 |---|---|
 | `COMPOSE_PROFILES` | which services to start and which images to build, comma-separated |
 | `DOMAIN` | the local zone. When changing it, update `mkcert-hosts.txt` and reissue the certificate |
-| `HTTP_PORT`, `HTTPS_PORT`, `PGSQL_PORT`, `REDIS_PORT` | ports on the host |
+| `HTTP_PORT`, `HTTPS_PORT`, `PGSQL_PORT`, `REDIS_PORT`, `MYSQL_PORT`, `MONGO_PORT`, `RABBITMQ_PORT` | ports on the host |
 | `COMPOSE_PROJECT_NAME` | the environment name, lowercase: prefix for volumes, the network and images, and the value of the Traefik label |
 | `CONTAINER_PREFIX` | prefix for infrastructure container names (`DEVKIT_REDIS`); leave empty if there are no other stacks on the machine |
 | `SUBNET_PREFIX` | the first two octets of the `/16` subnet. `init.sh` picks a free one. Traefik is always at `<SUBNET_PREFIX>.0.100` |
@@ -107,6 +111,10 @@ runtime profiles only build an image.
 |---|---|
 | (none) | traefik |
 | `db` | postgres, redis, redisinsight, meilisearch |
+| `mysql` | mysql |
+| `mongo` | mongo |
+| `rabbitmq` | rabbitmq |
+| `mail` | mailpit |
 | `s3` | garage, garage-webui |
 | `git` | forgejo |
 | `git-mcp` | forgejo-mcp |
@@ -164,7 +172,7 @@ services:
 - **The `local` network** and the shared cache volumes (`go_mod`, `go_build`, `maven_m2`, `pip_cache`, `pnpm_store`, `cargo_registry`) are declared by the environment and must not be declared again. A project declares its own volumes itself.
 - **Names** of services, volumes and routers must be unique across connected projects.
 - **The `devenv.traefik=${COMPOSE_PROJECT_NAME}` label** is required: without it Traefik does not see the container.
-- **Environment services** are reachable by name: `postgres`, `redis`, `meilisearch`, `garage`, `forgejo`.
+- **Environment services** are reachable by name: `postgres`, `redis`, `meilisearch`, `mysql`, `mongo`, `rabbitmq`, `mailpit`, `garage`, `forgejo`.
 - **Your own Dockerfile** instead of an environment image: use `build: .` in place of `image` and `pull_policy`.
 
 A project service is managed with the usual commands: `docker compose logs -f shop`, `docker compose exec shop sh`,
@@ -227,6 +235,17 @@ Removing everything including data: `docker compose --profile '*' down -v`.
 **PostgreSQL.** Superuser and password: `PGSQL_ROOT_USER`, `PGSQL_ROOT_PASSWORD`.
 `*.sql` and `*.sh` files from `storage/PgSQL/init` run once, when an empty database is created.
 
+**MySQL.** User `root`, password `MYSQL_ROOT_PASSWORD`. Shell: `docker compose exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD"'`.
+
+**MongoDB.** Administrator: `MONGO_ROOT_USER`, `MONGO_ROOT_PASSWORD`.
+Connection string: `mongodb://<user>:<password>@mongo:27017/?authSource=admin`.
+
+**RabbitMQ.** User and password: `RABBITMQ_USER`, `RABBITMQ_PASSWORD`; the same pair opens the management UI.
+Connection string: `amqp://<user>:<password>@rabbitmq:5672/`.
+
+**Mailpit.** Point the project's mailer at SMTP host `mailpit`, port `1025`, no encryption; any login is accepted.
+Nothing is delivered outside: every message lands in the inbox at `https://mail.<DOMAIN>`.
+
 **Garage.** Assign the node layout once, then create keys and buckets at `https://garage.<DOMAIN>`:
 
 ```sh
@@ -276,7 +295,7 @@ The environment does not overlap with other compose projects and containers on t
 | Volumes, images, network | names prefixed with `COMPOSE_PROJECT_NAME` |
 | Subnet | `init.sh` picks a `172.x.0.0/16` that no other Docker network uses |
 | Routing | Traefik serves only containers labelled `devenv.traefik=<project>`. The containers carry no `traefik.enable=true` label, so a foreign Traefik does not pick them up |
-| Host ports | the only thing shared between stacks. `init.sh` warns if 80, 443, 5432 or 6379 is already published by another container; the port is changed in `.env` |
+| Host ports | the only thing shared between stacks. `init.sh` warns if a port from `.env` is already published by another container; the port is changed in `.env` |
 
 With a non-default `HTTPS_PORT` the addresses include the port: `https://traefik.alp:8443/dashboard/`.
 
@@ -288,6 +307,6 @@ In those cases `docker compose up` reports an error and the values are fixed in 
 
 ## Limitations
 
-- For development only. Traefik and Portainer have access to the Docker socket; the Postgres and Redis ports are open on all interfaces, and Redis has no password. Do not run it on a machine reachable from an untrusted network.
+- For development only. Traefik and Portainer have access to the Docker socket; the database and RabbitMQ ports are open on all interfaces, and Redis has no password. Do not run it on a machine reachable from an untrusted network.
 - System packages in the images (`apk`, `apt`) are installed from the repositories at build time. For bit-identical images on different machines, build once and distribute through a registry or `docker save`.
 - Runtime images are checked for freshness on every `docker compose up` (seconds from cache; the first PHP build takes several minutes).
