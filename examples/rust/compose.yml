@@ -1,0 +1,29 @@
+# Sample. Copy to the project root as compose.yml and replace "example" with the project name:
+# names of services, volumes and routers must be unique across connected projects.
+# To connect it: add a line to include in the environment's docker-compose.override.yml.
+# Paths here are relative to the project folder; variables come from the environment's .env.
+# Requires the image: the rust profile in COMPOSE_PROFILES.
+
+services:
+  example-rust:
+    image: ${COMPOSE_PROJECT_NAME}-rust
+    pull_policy: never # local image built by the environment: do not look for it in a registry
+    restart: unless-stopped
+    working_dir: /app
+    # hot reload: rebuild and restart on source changes (add --poll 2s on a shared folder)
+    command: watchexec --restart --exts rs,toml -- cargo run
+    volumes:
+      - ./:/app
+      # build output in a volume: large, and slow or broken on shared folders
+      - example_rust_target:/app/target
+      - cargo_registry:/usr/local/cargo/registry
+    networks: [local]
+    labels:
+      - "devenv.traefik=${COMPOSE_PROJECT_NAME}"
+      - "traefik.http.routers.exampleRust.entrypoints=websecure"
+      - "traefik.http.routers.exampleRust.tls=true"
+      - "traefik.http.routers.exampleRust.rule=Host(`example.${DOMAIN}`)"
+      - "traefik.http.services.exampleRust.loadbalancer.server.port=8000"
+
+volumes:
+  example_rust_target:

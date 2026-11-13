@@ -3,7 +3,7 @@
 English · [Русский](READMERU.md)
 
 A local development environment on Docker Compose: one Traefik with HTTPS on local domains,
-databases and supporting services, and ready-made images for PHP, Node, Go, Python and Java.
+databases and supporting services, and ready-made images for PHP, Node, Go, Python, Java and Rust.
 Each project describes itself in its own `compose.yml` and is connected with a single line.
 It runs the same way on Linux, macOS and Windows; all image versions are pinned.
 
@@ -32,6 +32,7 @@ Images for projects (they do not run on their own; project `compose.yml` files u
 | `<project>-go` | Go 1.27.4, air 1.67.4, goravel installer | `go` |
 | `<project>-python` | Python 3.15.2, fastapi 0.162.7, uvicorn 0.54.0 | `python` |
 | `<project>-java` | Temurin 25 LTS, Maven 3.9.16 | `java` |
+| `<project>-rust` | Rust 1.100.0, cargo, watchexec 2.8.0 | `rust` |
 
 `<DOMAIN>` defaults to `alp`; `<project>` is `COMPOSE_PROJECT_NAME`, `devkit` by default.
 
@@ -110,7 +111,7 @@ runtime profiles only build an image.
 | `git` | forgejo |
 | `git-mcp` | forgejo-mcp |
 | `tools` | portainer |
-| `php`, `node`, `go`, `python`, `java` | the image of that runtime |
+| `php`, `node`, `go`, `python`, `java`, `rust` | the image of that runtime |
 | `init` | mkcert (only through `docker compose run`) |
 
 ## Connecting a project
@@ -160,7 +161,7 @@ services:
 
 - **Paths** are resolved from the project folder, not from the environment root.
 - **Variables** from the environment's `.env` are available; a `.env` in the project folder is read as well.
-- **The `local` network** and the shared cache volumes (`go_mod`, `go_build`, `maven_m2`, `pip_cache`, `pnpm_store`) are declared by the environment and must not be declared again. A project declares its own volumes itself.
+- **The `local` network** and the shared cache volumes (`go_mod`, `go_build`, `maven_m2`, `pip_cache`, `pnpm_store`, `cargo_registry`) are declared by the environment and must not be declared again. A project declares its own volumes itself.
 - **Names** of services, volumes and routers must be unique across connected projects.
 - **The `devenv.traefik=${COMPOSE_PROJECT_NAME}` label** is required: without it Traefik does not see the container.
 - **Environment services** are reachable by name: `postgres`, `redis`, `meilisearch`, `garage`, `forgejo`.
@@ -178,6 +179,7 @@ A project service is managed with the usual commands: `docker compose logs -f sh
 | Go | 8000 | Started with `air`; settings in the project's `.air.toml` |
 | Python | 8000 | Install project dependencies into the project's `.venv`: `python -m venv --system-site-packages .venv` (add `--copies` on a shared folder), and use `.venv/bin/python -m uvicorn` in the command |
 | Java | 8080 | Started with `mvn spring-boot:run`; the sample has not been tested on a real project |
+| Rust | 8000 | Started with `watchexec`, which rebuilds and restarts `cargo run` on changes. `target/` is kept in a volume |
 
 ### Hot reload
 
@@ -186,7 +188,7 @@ WebSocket through Traefik works without extra settings. The dev server must allo
 
 On shared folders (vboxsf, a Windows drive in WSL) file change events do not arrive, so polling is needed:
 `WATCHPACK_POLLING=true` (next/webpack), `CHOKIDAR_USEPOLLING=true`, `server.watch.usePolling` (vite),
-`poll = true` in `.air.toml` (air), `WATCHFILES_FORCE_POLLING=true` (uvicorn).
+`poll = true` in `.air.toml` (air), `WATCHFILES_FORCE_POLLING=true` (uvicorn), `--poll 2s` (watchexec).
 
 ## Certificates
 
@@ -246,7 +248,7 @@ Address: `https://git.<DOMAIN>/_mcp/<GIT_MCP_PATH_KEY>`.
 
 | Platform | What to keep in mind |
 |---|---|
-| Linux | Works as is. Node, Go, Python and Java containers run as root: files they create in the project folder are owned by root |
+| Linux | Works as is. Node, Go, Python, Java and Rust containers run as root: files they create in the project folder are owned by root |
 | Linux in VirtualBox, code on vboxsf | `SHARED_GID` = the gid of the `vboxsf` group (`init.sh` detects it). Hot reload needs polling |
 | macOS (Docker Desktop) | Works as is, including Apple Silicon: every image has an arm64 build |
 | Windows | Keep the environment and the code inside WSL, not on the `C:` drive. Otherwise: slow, no symlinks, polling required |

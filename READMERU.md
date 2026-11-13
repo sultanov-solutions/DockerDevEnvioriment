@@ -3,7 +3,7 @@
 [English](README.md) · Русский
 
 Локальное окружение разработки на Docker Compose: один Traefik с HTTPS на локальных доменах,
-базы и вспомогательные сервисы, готовые образы для PHP, Node, Go, Python и Java.
+базы и вспомогательные сервисы, готовые образы для PHP, Node, Go, Python, Java и Rust.
 Каждый проект описывает себя в собственном `compose.yml` и подключается одной строкой.
 Запускается одинаково на Linux, macOS и Windows; версии всех образов закреплены.
 
@@ -32,6 +32,7 @@
 | `<проект>-go` | Go 1.27.4, air 1.67.4, goravel installer | `go` |
 | `<проект>-python` | Python 3.15.2, fastapi 0.162.7, uvicorn 0.54.0 | `python` |
 | `<проект>-java` | Temurin 25 LTS, Maven 3.9.16 | `java` |
+| `<проект>-rust` | Rust 1.100.0, cargo, watchexec 2.8.0 | `rust` |
 
 `<DOMAIN>` по умолчанию `alp`, `<проект>` это `COMPOSE_PROJECT_NAME`, по умолчанию `devkit`.
 
@@ -110,7 +111,7 @@ docker compose up -d
 | `git` | forgejo |
 | `git-mcp` | forgejo-mcp |
 | `tools` | portainer |
-| `php`, `node`, `go`, `python`, `java` | образ соответствующего рантайма |
+| `php`, `node`, `go`, `python`, `java`, `rust` | образ соответствующего рантайма |
 | `init` | mkcert (только через `docker compose run`) |
 
 ## Подключение проекта
@@ -160,7 +161,7 @@ services:
 
 - **Пути** считаются от папки проекта, а не от корня окружения.
 - **Переменные** из `.env` окружения доступны; `.env` в папке проекта тоже читается.
-- **Сеть `local`** и общие тома кэшей (`go_mod`, `go_build`, `maven_m2`, `pip_cache`, `pnpm_store`) объявлены в окружении, повторно объявлять не нужно. Свои тома проект объявляет сам.
+- **Сеть `local`** и общие тома кэшей (`go_mod`, `go_build`, `maven_m2`, `pip_cache`, `pnpm_store`, `cargo_registry`) объявлены в окружении, повторно объявлять не нужно. Свои тома проект объявляет сам.
 - **Имена** сервисов, томов и роутов уникальны среди подключённых проектов.
 - **Метка `devenv.traefik=${COMPOSE_PROJECT_NAME}`** обязательна: без неё Traefik контейнер не видит.
 - **Сервисы окружения** доступны по именам: `postgres`, `redis`, `meilisearch`, `garage`, `forgejo`.
@@ -178,6 +179,7 @@ services:
 | Go | 8000 | Запускается `air`; настройки в `.air.toml` проекта |
 | Python | 8000 | Свои зависимости ставить в `.venv` проекта: `python -m venv --system-site-packages .venv` (на общей папке добавить `--copies`), в команде `.venv/bin/python -m uvicorn` |
 | Java | 8080 | Запускается `mvn spring-boot:run`; образец на реальном проекте не проверялся |
+| Rust | 8000 | Запускается `watchexec`: пересобирает и перезапускает `cargo run` при изменениях. `target/` держится в томе |
 
 ### Hot reload
 
@@ -186,7 +188,7 @@ WebSocket через Traefik работает без настроек. Dev-се�
 
 На общих папках (vboxsf, диск Windows в WSL) события изменения файлов не приходят, нужен режим опроса:
 `WATCHPACK_POLLING=true` (next/webpack), `CHOKIDAR_USEPOLLING=true`, `server.watch.usePolling` (vite),
-`poll = true` в `.air.toml` (air), `WATCHFILES_FORCE_POLLING=true` (uvicorn).
+`poll = true` в `.air.toml` (air), `WATCHFILES_FORCE_POLLING=true` (uvicorn), `--poll 2s` (watchexec).
 
 ## Сертификаты
 
@@ -246,7 +248,7 @@ docker compose exec forgejo forgejo admin user create --admin --username <user> 
 
 | Платформа | Что учесть |
 |---|---|
-| Linux | Работает как есть. Контейнеры Node, Go, Python и Java работают от root: созданные ими файлы в папке проекта принадлежат root |
+| Linux | Работает как есть. Контейнеры Node, Go, Python, Java и Rust работают от root: созданные ими файлы в папке проекта принадлежат root |
 | Linux в VirtualBox, код на vboxsf | `SHARED_GID` = gid группы `vboxsf` (`init.sh` определяет сам). Нужен режим опроса для hot reload |
 | macOS (Docker Desktop) | Работает как есть, включая Apple Silicon: у всех образов есть сборка arm64 |
 | Windows | Окружение и код держать внутри WSL, не на диске `C:`. Иначе: медленно, нет симлинков, нужен режим опроса |

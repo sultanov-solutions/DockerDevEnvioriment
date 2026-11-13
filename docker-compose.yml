@@ -211,6 +211,13 @@ services:
     scale: 0
     pull_policy: build # local image: always build, never look for it in a registry
 
+  rust:
+    profiles: ["rust"]
+    image: ${COMPOSE_PROJECT_NAME}-rust
+    build: ${CONTAINERS_ROOT_PATH}/Rust
+    scale: 0
+    pull_policy: build # local image: always build, never look for it in a registry
+
   java:
     profiles: ["java"]
     image: ${COMPOSE_PROJECT_NAME}-java
@@ -345,6 +352,7 @@ volumes:
   go_build:
   maven_m2:
   pip_cache:
+  cargo_registry:
   pnpm_store:
   forgejo_data:
   forgejo_config:
