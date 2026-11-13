@@ -33,6 +33,9 @@
 
 `<DOMAIN>` по умолчанию `alp`, `<проект>` это `COMPOSE_PROJECT_NAME`, по умолчанию `devkit`.
 
+У каждого сервиса и образа свой `Containers/<имя>/Dockerfile`: версия задаётся в его `FROM`,
+там же сервис расширяется (пакеты, конфиги, плагины). После правки: `docker compose up -d --build`.
+
 ## Требования
 
 - Docker Engine 25+ и Docker Compose 2.24+ (проверено на Engine 29.9, Compose 5.6).
@@ -69,7 +72,7 @@ docker compose up -d
 | `.env` / `.env.example` | настройки и секреты / образец | нет / да |
 | `init.sh` | первичная подготовка машины | да |
 | `mkcert-hosts.txt` | список хостов для сертификата | да |
-| `Containers/` | Dockerfile и конфиги | да |
+| `Containers/` | Dockerfile каждого сервиса и образа, конфиги | да |
 | `Sites/` | место для проектов по умолчанию (`SITES_PATH`) | нет |
 | `storage/` | сертификаты, дампы и init-скрипты Postgres | нет |
 
@@ -249,7 +252,8 @@ docker compose exec forgejo forgejo admin user create --admin --username <user> 
 ## Команды
 
 ```sh
-docker compose up -d                      # применить изменения compose, .env и Dockerfile
+docker compose up -d                      # применить изменения compose и .env
+docker compose up -d --build              # то же и пересобрать образы после правки Dockerfile
 docker compose up -d --remove-orphans     # то же и убрать контейнеры отключённых проектов
 docker compose logs -f --tail 100 shop    # логи сервиса
 docker compose ps                         # состояние

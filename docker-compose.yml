@@ -15,7 +15,7 @@ x-healthcheck: &default-health-check
 
 services:
   traefik:
-    image: traefik:v3.7.18
+    build: ${CONTAINERS_ROOT_PATH}/Traefik
     container_name: ${TRAEFIK_CONTAINER_NAME}
     hostname: ${TRAEFIK_CONTAINER_NAME}
     restart: unless-stopped
@@ -63,7 +63,7 @@ services:
   # Разовый запуск: docker compose run --rm mkcert
   mkcert:
     profiles: ["init"]
-    image: alpine/mkcert@sha256:a8f4f5af61908b4c79c2e9d1e5f23e747f29de174649209ebafcab03d4f6d5fd # версий у образа нет, только latest
+    build: ${CONTAINERS_ROOT_PATH}/Mkcert
     environment:
       - CAROOT=/certs
     volumes:
@@ -78,7 +78,7 @@ services:
 
   portainer:
     profiles: ["tools"]
-    image: portainer/portainer-ce:2.45.3 # текущий LTS
+    build: ${CONTAINERS_ROOT_PATH}/Portainer
     container_name: ${PORTAINER_CONTAINER_NAME}
     restart: always
     volumes:
@@ -114,7 +114,7 @@ services:
 
   redisinsight:
     profiles: ["db"]
-    image: redis/redisinsight:3.8.0
+    build: ${CONTAINERS_ROOT_PATH}/RedisInsight
     container_name: ${REDISINSIGHT_CONTAINER_NAME}
     restart: unless-stopped
     volumes:
@@ -133,7 +133,7 @@ services:
 
   meilisearch:
     profiles: ["db"]
-    image: getmeili/meilisearch:v1.56.2
+    build: ${CONTAINERS_ROOT_PATH}/MeiliSearch
     container_name: ${MEILISEARCH_CONTAINER_NAME}
     restart: unless-stopped
     environment:
@@ -220,7 +220,7 @@ services:
 
   forgejo:
     profiles: ["git"]
-    image: codeberg.org/forgejo/forgejo:17.0.1-rootless
+    build: ${CONTAINERS_ROOT_PATH}/Forgejo
     container_name: ${FORGEJO_CONTAINER_NAME}
     hostname: ${FORGEJO_CONTAINER_NAME}
     restart: unless-stopped
@@ -252,7 +252,7 @@ services:
   # Нужен FORGEJOMCP_TOKEN (токен из Forgejo), поэтому отдельный профиль.
   forgejo-mcp:
     profiles: ["git-mcp"]
-    image: ronmi/forgejo-mcp@sha256:dc064b964c2c473310f2d0c7da008223f753224e5c84bf84fe5e268813d43464 # версий у образа нет, только latest
+    build: ${CONTAINERS_ROOT_PATH}/ForgejoMcp
     container_name: ${FORGEJO_MCP_CONTAINER_NAME}
     hostname: ${FORGEJO_MCP_CONTAINER_NAME}
     restart: unless-stopped
@@ -277,7 +277,7 @@ services:
 
   garage:
     profiles: ["s3"]
-    image: dxflrs/garage:v2.5.0
+    build: ${CONTAINERS_ROOT_PATH}/Garage
     container_name: ${GARAGE_CONTAINER_NAME}
     hostname: ${GARAGE_CONTAINER_NAME}
     restart: unless-stopped
@@ -302,7 +302,7 @@ services:
 
   garage-webui:
     profiles: ["s3"]
-    image: khairul169/garage-webui:1.1.0
+    build: ${CONTAINERS_ROOT_PATH}/GarageWebUI
     container_name: ${GARAGE_CONTAINER_NAME}_WEBUI
     hostname: ${GARAGE_CONTAINER_NAME}_WEBUI
     restart: unless-stopped
