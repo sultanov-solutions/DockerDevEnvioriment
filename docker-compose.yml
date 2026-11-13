@@ -218,50 +218,6 @@ services:
     scale: 0
     pull_policy: build # образ локальный, в реестрах его нет
 
-  # --- Инструменты -------------------------------------------------------------------
-
-  playwright:
-    profiles: ["tools"]
-    container_name: ${PLAYWRIGHT_CONTAINER_NAME}
-    hostname: ${PLAYWRIGHT_CONTAINER_NAME}
-    build: ${CONTAINERS_ROOT_PATH}/Playwright
-    restart: unless-stopped
-    user: "${USER_ID}:${GROUP_ID}"
-    group_add:
-      - "${SHARED_GID}"
-    mem_limit: 1g
-    cpus: ${PLAYWRIGHT_CPUS:-2} # на машине с одним ядром поставить 1
-    environment:
-      HOME: /tmp/home # доступен на запись любому uid
-      NODE_EXTRA_CA_CERTS: /certs/rootCA.pem
-    volumes:
-      - ${PLAYWRIGHT_STORAGE_PATH}:/out
-      # файл появляется после `docker compose run --rm mkcert`; без него docker создаст каталог
-      - ${TRAEFIK_STORAGE_PATH}/certs/rootCA.pem:/certs/rootCA.pem:ro
-    # локальные домены внутри сети ведут на traefik; проектные дописываются в override
-    extra_hosts:
-      - "traefik.${DOMAIN}:${SUBNET_PREFIX}.0.100"
-      - "portainer.${DOMAIN}:${SUBNET_PREFIX}.0.100"
-      - "redis.${DOMAIN}:${SUBNET_PREFIX}.0.100"
-      - "meilisearch.${DOMAIN}:${SUBNET_PREFIX}.0.100"
-      - "git.${DOMAIN}:${SUBNET_PREFIX}.0.100"
-      - "s3.${DOMAIN}:${SUBNET_PREFIX}.0.100"
-      - "garage.${DOMAIN}:${SUBNET_PREFIX}.0.100"
-    working_dir: /out
-    command:
-      - sh
-      - -c
-      - |
-        # Chromium доверяет только своему хранилищу NSS: кладём туда локальный CA
-        mkdir -p $$HOME/.pki/nssdb
-        certutil -d sql:$$HOME/.pki/nssdb -N --empty-password 2>/dev/null
-        certutil -d sql:$$HOME/.pki/nssdb -A -t "C,," -n devenv -i /certs/rootCA.pem \
-          || echo "локальный CA не установлен: сначала docker compose run --rm mkcert"
-        exec sleep infinity
-    logging: *default-logging
-    networks:
-      - local
-
   forgejo:
     profiles: ["git"]
     image: codeberg.org/forgejo/forgejo:17.0.1-rootless

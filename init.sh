@@ -38,12 +38,10 @@ fi
 umask 022
 . ./.env
 
-# Каталоги создаём сами: иначе docker создаст их от root и контейнеры
-# с user ${USER_ID} (playwright) не смогут в них писать.
+# Каталоги создаём сами: иначе docker создаст их от root.
 mkdir -p \
     "$TRAEFIK_STORAGE_PATH/certs" \
     "$PGSQL_STORAGE_PATH/init" "$PGSQL_STORAGE_PATH/tmp" \
-    "$PLAYWRIGHT_STORAGE_PATH" \
     "$SITES_PATH"
 
 # Порты, уже опубликованные контейнерами других проектов: предупреждаем, .env не трогаем.

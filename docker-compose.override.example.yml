@@ -8,8 +8,3 @@ include:
   - ${SITES_PATH}/example/compose.yml
   # - ${SITES_PATH}/frozen-project/compose.yml
 
-# Чтобы Playwright открывал проектные домены изнутри сети:
-# services:
-#   playwright:
-#     extra_hosts:
-#       - "example.${DOMAIN}:${SUBNET_PREFIX}.0.100"

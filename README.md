@@ -20,7 +20,6 @@
 | Forgejo | 17.0.1 | `git` | `https://git.<DOMAIN>` |
 | forgejo-mcp | по digest | `git-mcp` | `https://git.<DOMAIN>/_mcp/<ключ>` |
 | Portainer | 2.45.3 LTS | `tools` | `https://portainer.<DOMAIN>` |
-| Playwright (Chromium) | 1.65.0 | `tools` | без адреса, `docker compose exec` |
 
 Образы для проектов (сами не запускаются, их используют `compose.yml` проектов):
 
@@ -72,7 +71,7 @@ docker compose up -d
 | `mkcert-hosts.txt` | список хостов для сертификата | да |
 | `Containers/` | Dockerfile и конфиги | да |
 | `Sites/` | место для проектов по умолчанию (`SITES_PATH`) | нет |
-| `storage/` | сертификаты, дампы Postgres, вывод Playwright | нет |
+| `storage/` | сертификаты, дампы и init-скрипты Postgres | нет |
 
 Данные Postgres, Redis, MeiliSearch, Garage, Forgejo, Portainer и кэши сборки лежат
 в именованных томах Docker, а не в `storage/`: так они работают одинаково на любой ОС.
@@ -105,7 +104,7 @@ docker compose up -d
 | `s3` | garage, garage-webui |
 | `git` | forgejo |
 | `git-mcp` | forgejo-mcp |
-| `tools` | portainer, playwright |
+| `tools` | portainer |
 | `php`, `node`, `go`, `python`, `java` | образ соответствующего рантайма |
 | `init` | mkcert (только через `docker compose run`) |
 
@@ -184,17 +183,6 @@ WebSocket через Traefik работает без настроек. Dev-се�
 `WATCHPACK_POLLING=true` (next/webpack), `CHOKIDAR_USEPOLLING=true`, `server.watch.usePolling` (vite),
 `poll = true` в `.air.toml` (air), `WATCHFILES_FORCE_POLLING=true` (uvicorn).
 
-### Playwright и проектные домены
-
-Чтобы Playwright открывал домен проекта изнутри сети, добавить в `docker-compose.override.yml`:
-
-```yaml
-services:
-  playwright:
-    extra_hosts:
-      - "shop.${DOMAIN}:${SUBNET_PREFIX}.0.100"
-```
-
 ## Сертификаты
 
 - Локальный центр сертификации и сертификат лежат в `storage/Traefik/certs`.
@@ -248,10 +236,6 @@ docker compose exec forgejo forgejo admin user create --admin --username <user> 
 
 **forgejo-mcp.** Создать токен в Forgejo, вписать в `FORGEJOMCP_TOKEN`, добавить профиль `git-mcp`.
 Адрес: `https://git.<DOMAIN>/_mcp/<GIT_MCP_PATH_KEY>`.
-
-**Playwright.** `docker compose exec playwright sh`; рабочий каталог `/out` это `storage/Playwright` на хосте.
-Chromium и Node в контейнере доверяют локальному центру сертификации, локальные домены ведут на Traefik.
-Контейнер запускать после выпуска сертификата.
 
 ## Особенности платформ
 
