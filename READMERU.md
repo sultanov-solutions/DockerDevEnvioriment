@@ -47,7 +47,7 @@
 ## Быстрый старт
 
 ```sh
-git clone https://github.com/cljamal/DockerDevEnvioriment.git devkit && cd devkit
+git clone https://github.com/sultanov-solutions/DockerDevEnvioriment.git devkit && cd devkit
 ./init.sh                         # .env с секретами, свободная подсеть, каталоги storage/
 docker compose run --rm mkcert    # выпускает сертификат для хостов из mkcert-hosts.txt
 docker compose up -d

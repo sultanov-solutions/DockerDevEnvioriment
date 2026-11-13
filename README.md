@@ -47,7 +47,7 @@ and that is also where a service is extended (packages, configs, plugins). After
 ## Quick start
 
 ```sh
-git clone https://github.com/cljamal/DockerDevEnvioriment.git devkit && cd devkit
+git clone https://github.com/sultanov-solutions/DockerDevEnvioriment.git devkit && cd devkit
 ./init.sh                         # .env with secrets, a free subnet, storage/ directories
 docker compose run --rm mkcert    # issues a certificate for the hosts in mkcert-hosts.txt
 docker compose up -d
