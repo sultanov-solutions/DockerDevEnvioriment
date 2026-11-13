@@ -1,0 +1,29 @@
+# Образец. Скопировать в корень проекта как compose.yml и заменить "example" на имя проекта:
+# имена сервисов, томов и роутов должны быть уникальны среди подключённых проектов.
+# Подключение: строка в include файла docker-compose.override.yml окружения.
+# Пути здесь считаются от папки проекта; переменные берутся из .env окружения.
+# Нужен образ: профиль node в COMPOSE_PROFILES.
+
+services:
+  example-node:
+    image: ${COMPOSE_PROJECT_NAME}-node
+    pull_policy: never # образ собирает окружение, в реестрах его нет
+    restart: unless-stopped
+    working_dir: /app
+    # dev-сервер должен слушать 0.0.0.0, порт тот же, что в метке ниже
+    command: sh -c "pnpm install && pnpm dev"
+    volumes:
+      - ./:/app
+      # node_modules в томе: симлинки pnpm не работают на общих папках (vboxsf, диск Windows)
+      - example_node_modules:/app/node_modules
+      - pnpm_store:/root/.local/share/pnpm/store
+    networks: [local]
+    labels:
+      - "devenv.traefik=${COMPOSE_PROJECT_NAME}"
+      - "traefik.http.routers.exampleNode.entrypoints=websecure"
+      - "traefik.http.routers.exampleNode.tls=true"
+      - "traefik.http.routers.exampleNode.rule=Host(`example.${DOMAIN}`)"
+      - "traefik.http.services.exampleNode.loadbalancer.server.port=3000"
+
+volumes:
+  example_node_modules:

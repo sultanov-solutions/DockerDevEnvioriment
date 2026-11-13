@@ -1,0 +1,26 @@
+# Образец. Скопировать в корень проекта как compose.yml и заменить "example" на имя проекта:
+# имена сервисов, томов и роутов должны быть уникальны среди подключённых проектов.
+# Подключение: строка в include файла docker-compose.override.yml окружения.
+# Пути здесь считаются от папки проекта; переменные берутся из .env окружения.
+# Нужен образ: профиль go в COMPOSE_PROFILES.
+
+services:
+  example-go:
+    image: ${COMPOSE_PROJECT_NAME}-go
+    pull_policy: never # образ собирает окружение, в реестрах его нет
+    restart: unless-stopped
+    working_dir: /app
+    command: air # hot reload; настройки в .air.toml проекта
+    environment:
+      GOFLAGS: -buildvcs=false
+    volumes:
+      - ./:/app
+      - go_mod:/go/pkg/mod
+      - go_build:/root/.cache/go-build
+    networks: [local]
+    labels:
+      - "devenv.traefik=${COMPOSE_PROJECT_NAME}"
+      - "traefik.http.routers.exampleGo.entrypoints=websecure"
+      - "traefik.http.routers.exampleGo.tls=true"
+      - "traefik.http.routers.exampleGo.rule=Host(`example.${DOMAIN}`)"
+      - "traefik.http.services.exampleGo.loadbalancer.server.port=8000"

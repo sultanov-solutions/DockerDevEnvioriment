@@ -1,0 +1,28 @@
+# Образец. Скопировать в корень проекта как compose.yml и заменить "example" на имя проекта:
+# имена сервисов, томов и роутов должны быть уникальны среди подключённых проектов.
+# Подключение: строка в include файла docker-compose.override.yml окружения.
+# Пути здесь считаются от папки проекта; переменные берутся из .env окружения.
+# Нужен образ: профиль python в COMPOSE_PROFILES. В образе есть fastapi и uvicorn.
+# Свои зависимости: python -m venv --system-site-packages .venv (на общей папке ещё --copies),
+# затем в команде .venv/bin/python -m uvicorn вместо uvicorn.
+
+services:
+  example-python:
+    image: ${COMPOSE_PROJECT_NAME}-python
+    pull_policy: never # образ собирает окружение, в реестрах его нет
+    restart: unless-stopped
+    working_dir: /app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      PYTHONUNBUFFERED: "1" # логи сразу в docker logs
+      PYTHONDONTWRITEBYTECODE: "1" # без __pycache__ в папке проекта
+    volumes:
+      - ./:/app
+      - pip_cache:/root/.cache/pip
+    networks: [local]
+    labels:
+      - "devenv.traefik=${COMPOSE_PROJECT_NAME}"
+      - "traefik.http.routers.examplePython.entrypoints=websecure"
+      - "traefik.http.routers.examplePython.tls=true"
+      - "traefik.http.routers.examplePython.rule=Host(`example.${DOMAIN}`)"
+      - "traefik.http.services.examplePython.loadbalancer.server.port=8000"

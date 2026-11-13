@@ -1,0 +1,26 @@
+# Образец. Скопировать в корень проекта как compose.yml и заменить "example" на имя проекта:
+# имена сервисов, томов и роутов должны быть уникальны среди подключённых проектов.
+# Подключение: строка в include файла docker-compose.override.yml окружения.
+# Пути здесь считаются от папки проекта; переменные берутся из .env окружения.
+# Нужен образ: профиль php в COMPOSE_PROFILES.
+
+services:
+  example-php:
+    image: ${COMPOSE_PROJECT_NAME}-php85
+    pull_policy: never # образ собирает окружение, в реестрах его нет
+    restart: unless-stopped
+    # код на общей папке (vboxsf): пользователю nginx нужна её группа
+    group_add: ["${SHARED_GID}"]
+    volumes:
+      - ./:/var/www/html
+      # Laravel/Symfony (корень сайта в public/): положить nginx.conf из образца в проект
+      # - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # воркеры очередей, Octane: конфиги supervisor
+      # - ./docker/supervisor:/etc/supervisor/custom.d:ro
+    networks: [local]
+    labels:
+      - "devenv.traefik=${COMPOSE_PROJECT_NAME}"
+      - "traefik.http.routers.examplePhp.entrypoints=websecure"
+      - "traefik.http.routers.examplePhp.tls=true"
+      - "traefik.http.routers.examplePhp.rule=Host(`example.${DOMAIN}`)"
+      - "traefik.http.services.examplePhp.loadbalancer.server.port=8080"

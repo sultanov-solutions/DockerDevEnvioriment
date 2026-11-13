@@ -39,13 +39,12 @@ umask 022
 . ./.env
 
 # Каталоги создаём сами: иначе docker создаст их от root и контейнеры
-# с user ${USER_ID} (playwright, php) не смогут в них писать.
+# с user ${USER_ID} (playwright) не смогут в них писать.
 mkdir -p \
     "$TRAEFIK_STORAGE_PATH/certs" \
     "$PGSQL_STORAGE_PATH/init" "$PGSQL_STORAGE_PATH/tmp" \
-    "$PHP_STORAGE_PATH/php85/logs/nginx" "$PHP_STORAGE_PATH/php85/logs/php" "$PHP_STORAGE_PATH/php85/supervisor" \
     "$PLAYWRIGHT_STORAGE_PATH" \
-    "$SITES_PATH" "$GO_SITES_PATH"
+    "$SITES_PATH"
 
 # Порты, уже опубликованные контейнерами других проектов: предупреждаем, .env не трогаем.
 others=$(docker ps --format '{{.Label "com.docker.compose.project"}} {{.Names}} {{.Ports}}' 2>/dev/null | grep -v "^$COMPOSE_PROJECT_NAME " || true)
@@ -58,5 +57,5 @@ done
 cat <<MSG
 готово. дальше:
   docker compose run --rm mkcert      # сертификат для хостов из mkcert-hosts.txt
-  docker compose up -d --build
+  docker compose up -d
 MSG

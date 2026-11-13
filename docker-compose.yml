@@ -9,8 +9,9 @@ x-healthcheck: &default-health-check
   timeout: 10s
   retries: 5
 
-# Что поднимать, выбирает COMPOSE_PROFILES в .env. Без профиля работает только traefik.
-# Всё проектное (сайты, роуты, тома node_modules) живёт в docker-compose.override.yml.
+# Инфраструктура и образы рантаймов. Что поднимать и собирать, выбирает COMPOSE_PROFILES в .env;
+# без профиля работает только traefik.
+# Проекты подключаются своими compose.yml через include в docker-compose.override.yml.
 
 services:
   traefik:
@@ -97,7 +98,7 @@ services:
     profiles: ["db"]
     container_name: ${REDIS_CONTAINER_NAME}
     hostname: ${REDIS_CONTAINER_NAME}
-    build: ${REDIS_PATH}
+    build: ${CONTAINERS_ROOT_PATH}/Redis
     restart: unless-stopped
     volumes:
       - redis_data:/data
@@ -155,7 +156,7 @@ services:
     container_name: ${PGSQL_CONTAINER_NAME}
     hostname: ${PGSQL_CONTAINER_NAME}
     restart: unless-stopped
-    build: ${PGSQL_PATH}
+    build: ${CONTAINERS_ROOT_PATH}/PgSQL
     ports:
       - "${PGSQL_PORT:-5432}:5432"
     volumes:
@@ -173,120 +174,57 @@ services:
     networks:
       - local
 
-  node:
-    profiles: ["node"]
-    container_name: ${NODEJS_CONTAINER_NAME}
-    hostname: ${NODEJS_CONTAINER_NAME}
-    build: ${NODEJS_PATH}
-    restart: unless-stopped
-    volumes:
-      - ${SITES_PATH}:/var/www
-      - ${NODEJS_PATH}/pm2-loader.cjs:/var/pm2-loader/ecosystem.config.cjs
-    tty: true
-    working_dir: /var/www
-    logging: *default-logging
-    networks:
-      - local
-    command:
-      - sh
-      - -c
-      - "cd /var/pm2-loader && pm2-runtime start ecosystem.config.cjs"
+  # --- Образы рантаймов -------------------------------------------------------------
+  # scale: 0 = сервис только собирает образ, контейнеров не запускает.
+  # Контейнеры описывают сами проекты в своих compose.yml: image: ${COMPOSE_PROJECT_NAME}-<имя>
+  # (образцы в examples/). Какие образы собирать, решают профили в COMPOSE_PROFILES.
 
   php85:
     profiles: ["php"]
-    container_name: ${PHP85_CONTAINER_NAME}
-    hostname: ${PHP85_CONTAINER_NAME}
-    restart: unless-stopped
-    group_add:
-      - "${SHARED_GID}" # группа-владелец общих папок (Hosts, Sites), напр. vboxsf
+    image: ${COMPOSE_PROJECT_NAME}-php85
     build:
-      context: ${PHP85_PATH}
+      context: ${CONTAINERS_ROOT_PATH}/PHP/8.5
       args:
         USER_ID: ${USER_ID}
         GROUP_ID: ${GROUP_ID}
-    volumes:
-      - ${SITES_PATH}:/var/www
-      - ${HOSTS_PATH}:/etc/nginx/conf.d
-      - ${PHP_STORAGE_PATH}/php85/logs/nginx:/var/log/nginx
-      - ${PHP_STORAGE_PATH}/php85/logs/php:/var/log/php85
-      - ${PHP_STORAGE_PATH}/php85/supervisor:/etc/supervisor/custom.d
-    working_dir: /var/www
-    logging: *default-logging
-    healthcheck:
-      <<: *default-health-check
-      start_period: 30s
-    environment:
-      - COMPOSER_CACHE_DIR=/var/www/.composer_cache
-    command: >
-      sh -c "chown -R nginx:nginx /var/lib/nginx /var/log/nginx /var/log/php85 /run &&
-             /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf"
-    networks:
-      - local
+    scale: 0
+    pull_policy: build # образ локальный, в реестрах его нет
+
+  node:
+    profiles: ["node"]
+    image: ${COMPOSE_PROJECT_NAME}-node
+    build: ${CONTAINERS_ROOT_PATH}/NodeJS
+    scale: 0
+    pull_policy: build # образ локальный, в реестрах его нет
 
   go:
     profiles: ["go"]
-    container_name: ${GO_CONTAINER_NAME}
-    hostname: ${GO_CONTAINER_NAME}
-    restart: unless-stopped
-    group_add:
-      - "${SHARED_GID}"
-    build:
-      context: ${GO_PATH}
-    tty: true
-    command: sleep infinity # в override: sh -c "cd /var/www/<project> && air"
-    environment:
-      GOFLAGS: -buildvcs=false
-    volumes:
-      - ${GO_SITES_PATH}:/var/www
-      - go_mod:/go/pkg/mod
-      - go_build:/root/.cache/go-build
-    working_dir: /var/www
-    logging: *default-logging
-    networks:
-      - local
-
-  java:
-    profiles: ["java"]
-    container_name: ${JAVA_CONTAINER_NAME}
-    hostname: ${JAVA_CONTAINER_NAME}
-    restart: unless-stopped
-    build:
-      context: ${JAVA_PATH}
-    volumes:
-      - ${SITES_PATH}:/var/www
-      - maven_m2:/root/.m2
-    working_dir: /var/www
-    logging: *default-logging
-    environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
-    command: sleep infinity # в override: working_dir проекта + mvn spring-boot:run
-    networks:
-      - local
+    image: ${COMPOSE_PROJECT_NAME}-go
+    build: ${CONTAINERS_ROOT_PATH}/Golang
+    scale: 0
+    pull_policy: build # образ локальный, в реестрах его нет
 
   python:
     profiles: ["python"]
-    container_name: ${PYTHON_CONTAINER_NAME}
-    hostname: ${PYTHON_CONTAINER_NAME}
-    restart: unless-stopped
-    build:
-      context: ${PYTHON_PATH}
-    volumes:
-      - ${SITES_PATH}:/var/www
-      - pip_cache:/root/.cache/pip
-    working_dir: /var/www
-    logging: *default-logging
-    environment:
-      PYTHONUNBUFFERED: "1" # логи сразу в docker logs
-      PYTHONDONTWRITEBYTECODE: "1" # без __pycache__ в папках проектов
-    command: sleep infinity # в override: uvicorn проекта с --reload
-    networks:
-      - local
+    image: ${COMPOSE_PROJECT_NAME}-python
+    build: ${CONTAINERS_ROOT_PATH}/Python
+    scale: 0
+    pull_policy: build # образ локальный, в реестрах его нет
+
+  java:
+    profiles: ["java"]
+    image: ${COMPOSE_PROJECT_NAME}-java
+    build: ${CONTAINERS_ROOT_PATH}/Java
+    scale: 0
+    pull_policy: build # образ локальный, в реестрах его нет
+
+  # --- Инструменты -------------------------------------------------------------------
 
   playwright:
     profiles: ["tools"]
     container_name: ${PLAYWRIGHT_CONTAINER_NAME}
     hostname: ${PLAYWRIGHT_CONTAINER_NAME}
-    build: ${PLAYWRIGHT_PATH}
+    build: ${CONTAINERS_ROOT_PATH}/Playwright
     restart: unless-stopped
     user: "${USER_ID}:${GROUP_ID}"
     group_add:
@@ -300,7 +238,7 @@ services:
       - ${PLAYWRIGHT_STORAGE_PATH}:/out
       # файл появляется после `docker compose run --rm mkcert`; без него docker создаст каталог
       - ${TRAEFIK_STORAGE_PATH}/certs/rootCA.pem:/certs/rootCA.pem:ro
-    # локальные домены внутри сети ведут на traefik; проектные добавляются в override
+    # локальные домены внутри сети ведут на traefik; проектные дописываются в override
     extra_hosts:
       - "traefik.${DOMAIN}:${SUBNET_PREFIX}.0.100"
       - "portainer.${DOMAIN}:${SUBNET_PREFIX}.0.100"
@@ -438,7 +376,8 @@ networks:
       config:
         - subnet: ${SUBNET_PREFIX}.0.0/16
 
-# Данные инфраструктуры и кэши: именованные тома, одинаково на любой ОС и без возни с правами.
+# Данные инфраструктуры и общие кэши сборки (их подключают проекты): именованные тома,
+# одинаково на любой ОС и без возни с правами.
 # На виду (в storage/) остаётся то, с чем работают руками: сертификаты, логи, дампы, скриншоты.
 volumes:
   portainer_data:
@@ -450,6 +389,7 @@ volumes:
   go_build:
   maven_m2:
   pip_cache:
+  pnpm_store:
   forgejo_data:
   forgejo_config:
   garage_meta:
