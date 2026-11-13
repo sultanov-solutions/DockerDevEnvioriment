@@ -1,4 +1,4 @@
-# Хосты для локального сертификата, по одному в строке. Домен = DOMAIN из .env.
+# Hosts for the local certificate, one per line. The domain is DOMAIN from .env.
 traefik.alp
 portainer.alp
 redis.alp

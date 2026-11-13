@@ -69,7 +69,7 @@ RUN ln -sf $(which phpize85 || which phpize8 || which phpize) /usr/bin/phpize \
 RUN echo -e "\n[include]\nfiles = /etc/supervisor/custom.d/*.conf" >> /etc/supervisor/conf.d/supervisord.conf \
     && mkdir -p /etc/supervisor/custom.d
 
-# uid/gid пользователя nginx = владелец файлов на хосте, иначе нет прав на код в /var/www
+# nginx user uid/gid = owner of the files on the host, otherwise no access to the mounted code
 RUN sed -i "s/nginx:x:100:101:/nginx:x:${USER_ID}:${GROUP_ID}:/" /etc/passwd && \
     sed -i "s/nginx:x:101:/nginx:x:${GROUP_ID}:/" /etc/group
 
@@ -78,7 +78,7 @@ RUN chown -R nginx:nginx /var/lib/nginx \
     && touch /run/nginx.pid \
     && chown nginx:nginx /run/nginx.pid
 
-# dev: правка файла видна следующему же запросу (по умолчанию opcache перепроверяет раз в 2 с)
+# dev: a file change is visible on the very next request (by default opcache rechecks every 2 s)
 RUN echo "opcache.revalidate_freq=0" > /etc/php85/conf.d/99_dev.ini
 
 USER nginx

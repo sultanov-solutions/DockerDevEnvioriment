@@ -1,8 +1,8 @@
-# Образец. Скопировать в docker-compose.override.yml (в git не попадает):
-# compose подхватывает его сам, без -f.
+# Sample. Copy to docker-compose.override.yml (not tracked by git):
+# compose picks it up automatically, no -f needed.
 #
-# Здесь перечисляются подключённые проекты. У каждого свой compose.yml (образцы в examples/).
-# Проект включён: строка есть. Заморожен: закомментирована. Удалён: строку убрать.
+# This file lists the connected projects. Each has its own compose.yml (samples in examples/).
+# Project active: the line is present. Frozen: commented out. Removed: delete the line.
 
 include:
   - ${SITES_PATH}/example/compose.yml

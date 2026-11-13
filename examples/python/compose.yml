@@ -1,21 +1,21 @@
-# Образец. Скопировать в корень проекта как compose.yml и заменить "example" на имя проекта:
-# имена сервисов, томов и роутов должны быть уникальны среди подключённых проектов.
-# Подключение: строка в include файла docker-compose.override.yml окружения.
-# Пути здесь считаются от папки проекта; переменные берутся из .env окружения.
-# Нужен образ: профиль python в COMPOSE_PROFILES. В образе есть fastapi и uvicorn.
-# Свои зависимости: python -m venv --system-site-packages .venv (на общей папке ещё --copies),
-# затем в команде .venv/bin/python -m uvicorn вместо uvicorn.
+# Sample. Copy to the project root as compose.yml and replace "example" with the project name:
+# names of services, volumes and routers must be unique across connected projects.
+# To connect it: add a line to include in the environment's docker-compose.override.yml.
+# Paths here are relative to the project folder; variables come from the environment's .env.
+# Requires the image: the python profile in COMPOSE_PROFILES. The image ships fastapi and uvicorn.
+# Project dependencies: python -m venv --system-site-packages .venv (plus --copies on a shared folder),
+# then use .venv/bin/python -m uvicorn instead of uvicorn in the command.
 
 services:
   example-python:
     image: ${COMPOSE_PROJECT_NAME}-python
-    pull_policy: never # образ собирает окружение, в реестрах его нет
+    pull_policy: never # local image built by the environment: do not look for it in a registry
     restart: unless-stopped
     working_dir: /app
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     environment:
-      PYTHONUNBUFFERED: "1" # логи сразу в docker logs
-      PYTHONDONTWRITEBYTECODE: "1" # без __pycache__ в папке проекта
+      PYTHONUNBUFFERED: "1" # logs go straight to docker logs
+      PYTHONDONTWRITEBYTECODE: "1" # no __pycache__ in the project folder
     volumes:
       - ./:/app
       - pip_cache:/root/.cache/pip

@@ -1,20 +1,20 @@
-# Образец. Скопировать в корень проекта как compose.yml и заменить "example" на имя проекта:
-# имена сервисов, томов и роутов должны быть уникальны среди подключённых проектов.
-# Подключение: строка в include файла docker-compose.override.yml окружения.
-# Пути здесь считаются от папки проекта; переменные берутся из .env окружения.
-# Нужен образ: профиль node в COMPOSE_PROFILES.
+# Sample. Copy to the project root as compose.yml and replace "example" with the project name:
+# names of services, volumes and routers must be unique across connected projects.
+# To connect it: add a line to include in the environment's docker-compose.override.yml.
+# Paths here are relative to the project folder; variables come from the environment's .env.
+# Requires the image: the node profile in COMPOSE_PROFILES.
 
 services:
   example-node:
     image: ${COMPOSE_PROJECT_NAME}-node
-    pull_policy: never # образ собирает окружение, в реестрах его нет
+    pull_policy: never # local image built by the environment: do not look for it in a registry
     restart: unless-stopped
     working_dir: /app
-    # dev-сервер должен слушать 0.0.0.0, порт тот же, что в метке ниже
+    # the dev server must listen on 0.0.0.0, on the same port as in the label below
     command: sh -c "pnpm install && pnpm dev"
     volumes:
       - ./:/app
-      # node_modules в томе: симлинки pnpm не работают на общих папках (vboxsf, диск Windows)
+      # node_modules in a volume: pnpm symlinks do not work on shared folders (vboxsf, a Windows drive)
       - example_node_modules:/app/node_modules
       - pnpm_store:/root/.local/share/pnpm/store
     networks: [local]

@@ -1,16 +1,16 @@
-# Образец. Скопировать в корень проекта как compose.yml и заменить "example" на имя проекта:
-# имена сервисов, томов и роутов должны быть уникальны среди подключённых проектов.
-# Подключение: строка в include файла docker-compose.override.yml окружения.
-# Пути здесь считаются от папки проекта; переменные берутся из .env окружения.
-# Нужен образ: профиль go в COMPOSE_PROFILES.
+# Sample. Copy to the project root as compose.yml and replace "example" with the project name:
+# names of services, volumes and routers must be unique across connected projects.
+# To connect it: add a line to include in the environment's docker-compose.override.yml.
+# Paths here are relative to the project folder; variables come from the environment's .env.
+# Requires the image: the go profile in COMPOSE_PROFILES.
 
 services:
   example-go:
     image: ${COMPOSE_PROJECT_NAME}-go
-    pull_policy: never # образ собирает окружение, в реестрах его нет
+    pull_policy: never # local image built by the environment: do not look for it in a registry
     restart: unless-stopped
     working_dir: /app
-    command: air # hot reload; настройки в .air.toml проекта
+    command: air # hot reload; settings in the project's .air.toml
     environment:
       GOFLAGS: -buildvcs=false
     volumes:

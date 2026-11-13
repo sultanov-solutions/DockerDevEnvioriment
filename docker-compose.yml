@@ -9,9 +9,9 @@ x-healthcheck: &default-health-check
   timeout: 10s
   retries: 5
 
-# Инфраструктура и образы рантаймов. Что поднимать и собирать, выбирает COMPOSE_PROFILES в .env;
-# без профиля работает только traefik.
-# Проекты подключаются своими compose.yml через include в docker-compose.override.yml.
+# Infrastructure and runtime images. COMPOSE_PROFILES in .env selects what to start and build;
+# with no profile only traefik runs.
+# Projects are connected by their own compose.yml through include in docker-compose.override.yml.
 
 services:
   traefik:
@@ -25,7 +25,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      # traefik не роутит контейнеры в статусе starting, в том числе себя (dashboard)
+      # traefik does not route containers in the "starting" state, itself included (dashboard)
       start_period: 10s
       start_interval: 1s
     ports:
@@ -39,10 +39,10 @@ services:
       - --api.dashboard=true
       - --providers.docker=true
       - --providers.docker.network=${NETWORK_NAME}
-      # роутятся только контейнеры с меткой devenv.traefik=<проект>: чужие стеки на этом докере не видны нам,
-      # а чужой traefik не видит нас (метки traefik.enable=true у контейнеров нет)
-      - "--providers.docker.constraints=Label(`devenv.traefik`,`${COMPOSE_PROJECT_NAME:?задайте в .env}`)"
-      - --providers.file.directory=/dynamic/ # Важен слэш в конце
+      # only containers labelled devenv.traefik=<project> are routed: foreign stacks on this docker are invisible to us,
+      # and a foreign traefik does not see us (the containers carry no traefik.enable=true label)
+      - "--providers.docker.constraints=Label(`devenv.traefik`,`${COMPOSE_PROJECT_NAME:?set it in .env}`)"
+      - --providers.file.directory=/dynamic/ # the trailing slash matters
       - --providers.file.watch=true
       - --entrypoints.web.address=:80
       - --entrypoints.web.http.redirections.entryPoint.to=websecure
@@ -60,7 +60,7 @@ services:
       - "traefik.http.routers.dashboard.tls=true"
       - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN}`)"
 
-  # Разовый запуск: docker compose run --rm mkcert
+  # One-off run: docker compose run --rm mkcert
   mkcert:
     profiles: ["init"]
     build: ${CONTAINERS_ROOT_PATH}/Mkcert
@@ -162,7 +162,7 @@ services:
     volumes:
       - pgsql_data:/var/lib/postgresql/data
       - ${PGSQL_STORAGE_PATH}/init:/docker-entrypoint-initdb.d
-      - ${PGSQL_STORAGE_PATH}/tmp:/var/tmp-l # обмен дампами с хостом
+      - ${PGSQL_STORAGE_PATH}/tmp:/var/tmp-l # exchange dumps with the host
     environment:
       - POSTGRES_USER=${PGSQL_ROOT_USER}
       - POSTGRES_PASSWORD=${PGSQL_ROOT_PASSWORD}
@@ -174,10 +174,10 @@ services:
     networks:
       - local
 
-  # --- Образы рантаймов -------------------------------------------------------------
-  # scale: 0 = сервис только собирает образ, контейнеров не запускает.
-  # Контейнеры описывают сами проекты в своих compose.yml: image: ${COMPOSE_PROJECT_NAME}-<имя>
-  # (образцы в examples/). Какие образы собирать, решают профили в COMPOSE_PROFILES.
+  # --- Runtime images ----------------------------------------------------------------
+  # scale: 0 = the service only builds an image and starts no containers.
+  # Projects describe the containers in their own compose.yml: image: ${COMPOSE_PROJECT_NAME}-<name>
+  # (samples in examples/). The profiles in COMPOSE_PROFILES decide which images are built.
 
   php85:
     profiles: ["php"]
@@ -188,35 +188,35 @@ services:
         USER_ID: ${USER_ID}
         GROUP_ID: ${GROUP_ID}
     scale: 0
-    pull_policy: build # образ локальный, в реестрах его нет
+    pull_policy: build # local image: always build, never look for it in a registry
 
   node:
     profiles: ["node"]
     image: ${COMPOSE_PROJECT_NAME}-node
     build: ${CONTAINERS_ROOT_PATH}/NodeJS
     scale: 0
-    pull_policy: build # образ локальный, в реестрах его нет
+    pull_policy: build # local image: always build, never look for it in a registry
 
   go:
     profiles: ["go"]
     image: ${COMPOSE_PROJECT_NAME}-go
     build: ${CONTAINERS_ROOT_PATH}/Golang
     scale: 0
-    pull_policy: build # образ локальный, в реестрах его нет
+    pull_policy: build # local image: always build, never look for it in a registry
 
   python:
     profiles: ["python"]
     image: ${COMPOSE_PROJECT_NAME}-python
     build: ${CONTAINERS_ROOT_PATH}/Python
     scale: 0
-    pull_policy: build # образ локальный, в реестрах его нет
+    pull_policy: build # local image: always build, never look for it in a registry
 
   java:
     profiles: ["java"]
     image: ${COMPOSE_PROJECT_NAME}-java
     build: ${CONTAINERS_ROOT_PATH}/Java
     scale: 0
-    pull_policy: build # образ локальный, в реестрах его нет
+    pull_policy: build # local image: always build, never look for it in a registry
 
   forgejo:
     profiles: ["git"]
@@ -249,7 +249,7 @@ services:
       - local
     logging: *default-logging
 
-  # Нужен FORGEJOMCP_TOKEN (токен из Forgejo), поэтому отдельный профиль.
+  # Needs FORGEJOMCP_TOKEN (a token from Forgejo), hence a separate profile.
   forgejo-mcp:
     profiles: ["git-mcp"]
     build: ${CONTAINERS_ROOT_PATH}/ForgejoMcp
@@ -282,7 +282,7 @@ services:
     hostname: ${GARAGE_CONTAINER_NAME}
     restart: unless-stopped
     environment:
-      # секреты из .env, а не из garage.toml: конфиг остаётся в репозитории
+      # secrets come from .env, not from garage.toml: the config stays in the repository
       GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET}
       GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN}
     volumes:
@@ -332,9 +332,9 @@ networks:
       config:
         - subnet: ${SUBNET_PREFIX}.0.0/16
 
-# Данные инфраструктуры и общие кэши сборки (их подключают проекты): именованные тома,
-# одинаково на любой ОС и без возни с правами.
-# На виду (в storage/) остаётся то, с чем работают руками: сертификаты, логи, дампы, скриншоты.
+# Infrastructure data and shared build caches (mounted by projects): named volumes,
+# the same on every OS and with no permission juggling.
+# What people handle by hand stays visible in storage/: certificates and database dumps.
 volumes:
   portainer_data:
   redis_data:

@@ -1,21 +1,21 @@
-# Образец. Скопировать в корень проекта как compose.yml и заменить "example" на имя проекта:
-# имена сервисов, томов и роутов должны быть уникальны среди подключённых проектов.
-# Подключение: строка в include файла docker-compose.override.yml окружения.
-# Пути здесь считаются от папки проекта; переменные берутся из .env окружения.
-# Нужен образ: профиль php в COMPOSE_PROFILES.
+# Sample. Copy to the project root as compose.yml and replace "example" with the project name:
+# names of services, volumes and routers must be unique across connected projects.
+# To connect it: add a line to include in the environment's docker-compose.override.yml.
+# Paths here are relative to the project folder; variables come from the environment's .env.
+# Requires the image: the php profile in COMPOSE_PROFILES.
 
 services:
   example-php:
     image: ${COMPOSE_PROJECT_NAME}-php85
-    pull_policy: never # образ собирает окружение, в реестрах его нет
+    pull_policy: never # local image built by the environment: do not look for it in a registry
     restart: unless-stopped
-    # код на общей папке (vboxsf): пользователю nginx нужна её группа
+    # code on a shared folder (vboxsf): the nginx user needs its group
     group_add: ["${SHARED_GID}"]
     volumes:
       - ./:/var/www/html
-      # Laravel/Symfony (корень сайта в public/): положить nginx.conf из образца в проект
+      # Laravel/Symfony (web root in public/): put nginx.conf from the sample into the project
       # - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      # воркеры очередей, Octane: конфиги supervisor
+      # queue workers, Octane: supervisor configs
       # - ./docker/supervisor:/etc/supervisor/custom.d:ro
     networks: [local]
     labels:

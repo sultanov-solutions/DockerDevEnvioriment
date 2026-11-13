@@ -1,4 +1,4 @@
-# Секреты (rpc_secret, admin_token) приходят из окружения: GARAGE_RPC_SECRET, GARAGE_ADMIN_TOKEN.
+# Secrets (rpc_secret, admin_token) come from the environment: GARAGE_RPC_SECRET, GARAGE_ADMIN_TOKEN.
 metadata_dir = "/var/lib/garage/meta"
 data_dir = "/var/lib/garage/data"
 db_engine = "sqlite"
