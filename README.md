@@ -1,143 +1,145 @@
 # Docker Dev Environment
 
-Локальное окружение разработки на Docker Compose: один Traefik с HTTPS на локальных доменах,
-базы и вспомогательные сервисы, готовые образы для PHP, Node, Go, Python и Java.
-Каждый проект описывает себя в собственном `compose.yml` и подключается одной строкой.
-Запускается одинаково на Linux, macOS и Windows; версии всех образов закреплены.
+English · [Русский](READMERU.md)
 
-## Состав
+A local development environment on Docker Compose: one Traefik with HTTPS on local domains,
+databases and supporting services, and ready-made images for PHP, Node, Go, Python and Java.
+Each project describes itself in its own `compose.yml` and is connected with a single line.
+It runs the same way on Linux, macOS and Windows; all image versions are pinned.
 
-Сервисы:
+## What's inside
 
-| Сервис | Версия | Профиль | Адрес |
+Services:
+
+| Service | Version | Profile | Address |
 |---|---|---|---|
-| Traefik | 3.7.18 | всегда | `https://traefik.<DOMAIN>/dashboard/` |
-| PostgreSQL | 17.12 | `db` | `localhost:5432`, в сети `postgres:5432` |
-| Redis | 8.10.3 | `db` | `localhost:6379`, в сети `redis:6379` |
+| Traefik | 3.7.18 | always | `https://traefik.<DOMAIN>/dashboard/` |
+| PostgreSQL | 17.12 | `db` | `localhost:5432`, inside the network `postgres:5432` |
+| Redis | 8.10.3 | `db` | `localhost:6379`, inside the network `redis:6379` |
 | RedisInsight | 3.8.0 | `db` | `https://redis.<DOMAIN>` |
-| MeiliSearch | 1.56.2 | `db` | `https://meilisearch.<DOMAIN>`, в сети `meilisearch:7700` |
+| MeiliSearch | 1.56.2 | `db` | `https://meilisearch.<DOMAIN>`, inside the network `meilisearch:7700` |
 | Garage (S3) + WebUI | 2.5.0 / 1.1.0 | `s3` | `https://s3.<DOMAIN>`, `https://garage.<DOMAIN>` |
 | Forgejo | 17.0.1 | `git` | `https://git.<DOMAIN>` |
-| forgejo-mcp | по digest | `git-mcp` | `https://git.<DOMAIN>/_mcp/<ключ>` |
+| forgejo-mcp | pinned by digest | `git-mcp` | `https://git.<DOMAIN>/_mcp/<key>` |
 | Portainer | 2.45.3 LTS | `tools` | `https://portainer.<DOMAIN>` |
 
-Образы для проектов (сами не запускаются, их используют `compose.yml` проектов):
+Images for projects (they do not run on their own; project `compose.yml` files use them):
 
-| Образ | Что внутри | Профиль |
+| Image | Contents | Profile |
 |---|---|---|
-| `<проект>-php85` | PHP 8.5.12, nginx, php-fpm, supervisor, composer 2.11.2, swoole 6.2.5, ffmpeg, vips | `php` |
-| `<проект>-node` | Node.js 26.13.1 LTS, pnpm 12.18.0, pm2 7.1.2 | `node` |
-| `<проект>-go` | Go 1.27.4, air 1.67.4, goravel installer | `go` |
-| `<проект>-python` | Python 3.15.2, fastapi 0.162.7, uvicorn 0.54.0 | `python` |
-| `<проект>-java` | Temurin 25 LTS, Maven 3.9.16 | `java` |
+| `<project>-php85` | PHP 8.5.12, nginx, php-fpm, supervisor, composer 2.11.2, swoole 6.2.5, ffmpeg, vips | `php` |
+| `<project>-node` | Node.js 26.13.1 LTS, pnpm 12.18.0, pm2 7.1.2 | `node` |
+| `<project>-go` | Go 1.27.4, air 1.67.4, goravel installer | `go` |
+| `<project>-python` | Python 3.15.2, fastapi 0.162.7, uvicorn 0.54.0 | `python` |
+| `<project>-java` | Temurin 25 LTS, Maven 3.9.16 | `java` |
 
-`<DOMAIN>` по умолчанию `alp`, `<проект>` это `COMPOSE_PROJECT_NAME`, по умолчанию `devkit`.
+`<DOMAIN>` defaults to `alp`; `<project>` is `COMPOSE_PROJECT_NAME`, `devkit` by default.
 
-У каждого сервиса и образа свой `Containers/<имя>/Dockerfile`: версия задаётся в его `FROM`,
-там же сервис расширяется (пакеты, конфиги, плагины). После правки: `docker compose up -d --build`.
+Every service and image has its own `Containers/<name>/Dockerfile`: the version is set in its `FROM`,
+and that is also where a service is extended (packages, configs, plugins). After editing: `docker compose up -d --build`.
 
-## Требования
+## Requirements
 
-- Docker Engine 25+ и Docker Compose 2.24+ (проверено на Engine 29.9, Compose 5.6).
-- Свободные порты 80, 443, 5432, 6379 (меняются в `.env`).
-- Для `init.sh`: любой POSIX shell. На Windows: Git Bash, WSL или ручное заполнение `.env`.
+- Docker Engine 25+ and Docker Compose 2.24+ (tested on Engine 29.9, Compose 5.6).
+- Free ports 80, 443, 5432, 6379 (configurable in `.env`).
+- For `init.sh`: any POSIX shell. On Windows: Git Bash, WSL, or fill in `.env` by hand.
 
-## Быстрый старт
+## Quick start
 
 ```sh
 git clone https://github.com/cljamal/DockerDevEnvioriment.git devkit && cd devkit
-./init.sh                         # .env с секретами, свободная подсеть, каталоги storage/
-docker compose run --rm mkcert    # выпускает сертификат для хостов из mkcert-hosts.txt
+./init.sh                         # .env with secrets, a free subnet, storage/ directories
+docker compose run --rm mkcert    # issues a certificate for the hosts in mkcert-hosts.txt
 docker compose up -d
 ```
 
-Затем на машине, где открыт браузер:
+Then, on the machine where the browser runs:
 
-1. Добавить `storage/Traefik/certs/rootCA.pem` в доверенные корневые сертификаты (Firefox хранит их отдельно от системы).
-2. Прописать хосты из `mkcert-hosts.txt` в файл `hosts`: `127.0.0.1`, если Docker на этой же машине, иначе IP машины или виртуалки с Docker.
+1. Add `storage/Traefik/certs/rootCA.pem` to the trusted root certificates (Firefox keeps its own store, separate from the system one).
+2. Add the hosts from `mkcert-hosts.txt` to the `hosts` file: `127.0.0.1` if Docker runs on the same machine, otherwise the IP of the machine or VM running Docker.
 
-Проверка: `https://traefik.alp/dashboard/` открывается без предупреждения о сертификате.
+Check: `https://traefik.alp/dashboard/` opens without a certificate warning.
 
-Без shell: скопировать `.env.example` в `.env`, заменить каждое `__GENERATE__` своим значением
-(`GARAGE_RPC_SECRET`: ровно 64 hex-символа), создать каталог `storage/Traefik/certs`.
+Without a shell: copy `.env.example` to `.env`, replace every `__GENERATE__` with your own value
+(`GARAGE_RPC_SECRET`: exactly 64 hex characters), and create the `storage/Traefik/certs` directory.
 
-## Структура
+## Layout
 
-| Путь | Что это | В git |
+| Path | What it is | In git |
 |---|---|---|
-| `docker-compose.yml` | инфраструктура и сборка образов; под проекты не правится | да |
-| `docker-compose.override.yml` | список подключённых проектов | нет |
-| `docker-compose.override.example.yml` | образец списка | да |
-| `examples/` | образцы `compose.yml` для проектов на каждом рантайме | да |
-| `.env` / `.env.example` | настройки и секреты / образец | нет / да |
-| `init.sh` | первичная подготовка машины | да |
-| `mkcert-hosts.txt` | список хостов для сертификата | да |
-| `Containers/` | Dockerfile каждого сервиса и образа, конфиги | да |
-| `Sites/` | место для проектов по умолчанию (`SITES_PATH`) | нет |
-| `storage/` | сертификаты, дампы и init-скрипты Postgres | нет |
+| `docker-compose.yml` | infrastructure and image builds; not edited per project | yes |
+| `docker-compose.override.yml` | the list of connected projects | no |
+| `docker-compose.override.example.yml` | a sample of that list | yes |
+| `examples/` | sample `compose.yml` files for projects on each runtime | yes |
+| `.env` / `.env.example` | settings and secrets / sample | no / yes |
+| `init.sh` | first-time machine setup | yes |
+| `mkcert-hosts.txt` | the list of hosts for the certificate | yes |
+| `Containers/` | the Dockerfile of every service and image, configs | yes |
+| `Sites/` | default location for projects (`SITES_PATH`) | no |
+| `storage/` | certificates, Postgres dumps and init scripts | no |
 
-Данные Postgres, Redis, MeiliSearch, Garage, Forgejo, Portainer и кэши сборки лежат
-в именованных томах Docker, а не в `storage/`: так они работают одинаково на любой ОС.
+The data of Postgres, Redis, MeiliSearch, Garage, Forgejo and Portainer, and the build caches, live
+in named Docker volumes rather than in `storage/`, so they behave the same on every OS.
 
-## Настройка: `.env`
+## Configuration: `.env`
 
-| Переменная | Назначение |
+| Variable | Purpose |
 |---|---|
-| `COMPOSE_PROFILES` | какие сервисы поднимать и какие образы собирать, через запятую |
-| `DOMAIN` | локальная зона. При смене поправить `mkcert-hosts.txt` и перевыпустить сертификат |
-| `HTTP_PORT`, `HTTPS_PORT`, `PGSQL_PORT`, `REDIS_PORT` | порты на хосте |
-| `COMPOSE_PROJECT_NAME` | имя окружения строчными буквами: префикс томов, сети, образов и значение метки для Traefik |
-| `CONTAINER_PREFIX` | префикс имён контейнеров инфраструктуры (`DEVKIT_REDIS`); пустой, если других стеков на машине нет |
-| `SUBNET_PREFIX` | первые два октета подсети `/16`. `init.sh` подбирает свободную. Traefik всегда на `<SUBNET_PREFIX>.0.100` |
-| `USER_ID`, `GROUP_ID` | владелец файлов на хосте; от него работает PHP. После смены: `docker compose up -d` |
-| `SHARED_GID` | группа-владелец общей папки с кодом (`vboxsf`), иначе равна `GROUP_ID` |
-| `SITES_PATH` | папка с проектами, используется в путях `include` |
+| `COMPOSE_PROFILES` | which services to start and which images to build, comma-separated |
+| `DOMAIN` | the local zone. When changing it, update `mkcert-hosts.txt` and reissue the certificate |
+| `HTTP_PORT`, `HTTPS_PORT`, `PGSQL_PORT`, `REDIS_PORT` | ports on the host |
+| `COMPOSE_PROJECT_NAME` | the environment name, lowercase: prefix for volumes, the network and images, and the value of the Traefik label |
+| `CONTAINER_PREFIX` | prefix for infrastructure container names (`DEVKIT_REDIS`); leave empty if there are no other stacks on the machine |
+| `SUBNET_PREFIX` | the first two octets of the `/16` subnet. `init.sh` picks a free one. Traefik is always at `<SUBNET_PREFIX>.0.100` |
+| `USER_ID`, `GROUP_ID` | the owner of files on the host; PHP runs as this user. After changing: `docker compose up -d` |
+| `SHARED_GID` | the group that owns a shared code folder (`vboxsf`); otherwise equal to `GROUP_ID` |
+| `SITES_PATH` | the projects folder, used in `include` paths |
 
-Изменения в `.env` применяются командой `docker compose up -d`.
+Changes to `.env` are applied with `docker compose up -d`.
 
-## Профили
+## Profiles
 
-Профиль включается в `COMPOSE_PROFILES`. Профили сервисов запускают контейнеры,
-профили рантаймов только собирают образ.
+A profile is enabled by listing it in `COMPOSE_PROFILES`. Service profiles start containers;
+runtime profiles only build an image.
 
-| Профиль | Что даёт |
+| Profile | What it gives |
 |---|---|
-| (нет) | traefik |
+| (none) | traefik |
 | `db` | postgres, redis, redisinsight, meilisearch |
 | `s3` | garage, garage-webui |
 | `git` | forgejo |
 | `git-mcp` | forgejo-mcp |
 | `tools` | portainer |
-| `php`, `node`, `go`, `python`, `java` | образ соответствующего рантайма |
-| `init` | mkcert (только через `docker compose run`) |
+| `php`, `node`, `go`, `python`, `java` | the image of that runtime |
+| `init` | mkcert (only through `docker compose run`) |
 
-## Подключение проекта
+## Connecting a project
 
-Проект подключается своим `compose.yml`. В самом окружении меняется одна строка.
+A project is connected through its own `compose.yml`. In the environment itself only one line changes.
 
-1. Включить профиль рантайма в `COMPOSE_PROFILES` (например, `db,tools,python`).
-2. Скопировать образец из `examples/<рантайм>/compose.yml` в корень проекта и заменить в нём `example` на имя проекта.
-3. Добавить домен проекта в `mkcert-hosts.txt`, выполнить `docker compose run --rm mkcert`, прописать домен в файл `hosts`.
-4. Добавить проект в `docker-compose.override.yml` (создаётся копированием `docker-compose.override.example.yml`; compose подхватывает его сам, без `-f`):
+1. Enable the runtime profile in `COMPOSE_PROFILES` (for example `db,tools,python`).
+2. Copy the sample from `examples/<runtime>/compose.yml` to the project root and replace `example` in it with the project name.
+3. Add the project domain to `mkcert-hosts.txt`, run `docker compose run --rm mkcert`, and add the domain to the `hosts` file.
+4. Add the project to `docker-compose.override.yml` (create it by copying `docker-compose.override.example.yml`; compose picks it up automatically, no `-f` needed):
 
 ```yaml
 include:
   - ${SITES_PATH}/shop/compose.yml
-  # - ${SITES_PATH}/blog/compose.yml   # заморожен
+  # - ${SITES_PATH}/blog/compose.yml   # frozen
 ```
 
 5. `docker compose up -d`.
 
-Управление: проект включён, пока его строка есть в `include`. Заморозить: закомментировать строку
-и выполнить `docker compose up -d --remove-orphans`. Удалить: убрать строку и папку проекта.
-Если строка указывает на отсутствующий файл, compose сообщит об этом и не запустится.
+Managing projects: a project is active while its line is in `include`. To freeze it, comment the line out
+and run `docker compose up -d --remove-orphans`. To remove it, delete the line and the project folder.
+If a line points to a missing file, compose reports it and does not start.
 
-### Что должно быть в `compose.yml` проекта
+### What a project's `compose.yml` must contain
 
 ```yaml
 services:
-  shop:                                        # уникальное имя сервиса
-    image: ${COMPOSE_PROJECT_NAME}-python      # образ окружения
+  shop:                                        # a unique service name
+    image: ${COMPOSE_PROJECT_NAME}-python      # an environment image
     pull_policy: never
     restart: unless-stopped
     working_dir: /app
@@ -145,9 +147,9 @@ services:
     environment:
       DATABASE_URL: postgres://${PGSQL_ROOT_USER}:${PGSQL_ROOT_PASSWORD}@postgres:5432/shop
     volumes:
-      - ./:/app                                # путь от папки проекта
-      - pip_cache:/root/.cache/pip             # общий кэш окружения
-    networks: [local]                          # общая сеть окружения
+      - ./:/app                                # path relative to the project folder
+      - pip_cache:/root/.cache/pip             # a shared cache of the environment
+    networks: [local]                          # the shared network of the environment
     labels:
       - "devenv.traefik=${COMPOSE_PROJECT_NAME}"
       - "traefik.http.routers.shop.entrypoints=websecure"
@@ -156,134 +158,134 @@ services:
       - "traefik.http.services.shop.loadbalancer.server.port=8000"
 ```
 
-- **Пути** считаются от папки проекта, а не от корня окружения.
-- **Переменные** из `.env` окружения доступны; `.env` в папке проекта тоже читается.
-- **Сеть `local`** и общие тома кэшей (`go_mod`, `go_build`, `maven_m2`, `pip_cache`, `pnpm_store`) объявлены в окружении, повторно объявлять не нужно. Свои тома проект объявляет сам.
-- **Имена** сервисов, томов и роутов уникальны среди подключённых проектов.
-- **Метка `devenv.traefik=${COMPOSE_PROJECT_NAME}`** обязательна: без неё Traefik контейнер не видит.
-- **Сервисы окружения** доступны по именам: `postgres`, `redis`, `meilisearch`, `garage`, `forgejo`.
-- **Свой Dockerfile** вместо образа окружения: `build: .` вместо `image` и `pull_policy`.
+- **Paths** are resolved from the project folder, not from the environment root.
+- **Variables** from the environment's `.env` are available; a `.env` in the project folder is read as well.
+- **The `local` network** and the shared cache volumes (`go_mod`, `go_build`, `maven_m2`, `pip_cache`, `pnpm_store`) are declared by the environment and must not be declared again. A project declares its own volumes itself.
+- **Names** of services, volumes and routers must be unique across connected projects.
+- **The `devenv.traefik=${COMPOSE_PROJECT_NAME}` label** is required: without it Traefik does not see the container.
+- **Environment services** are reachable by name: `postgres`, `redis`, `meilisearch`, `garage`, `forgejo`.
+- **Your own Dockerfile** instead of an environment image: use `build: .` in place of `image` and `pull_policy`.
 
-Сервис проекта управляется обычными командами: `docker compose logs -f shop`, `docker compose exec shop sh`,
+A project service is managed with the usual commands: `docker compose logs -f shop`, `docker compose exec shop sh`,
 `docker compose restart shop`.
 
-### Особенности рантаймов
+### Runtime notes
 
-| Рантайм | Порт в образце | Что учесть |
+| Runtime | Port in the sample | What to keep in mind |
 |---|---|---|
-| PHP | 8080 | Код монтируется в `/var/www/html`. Для Laravel/Symfony (корень в `public/`) положить в проект `examples/php/nginx.conf` и раскомментировать его монтирование. Правки кода видны на следующем запросе (`opcache.revalidate_freq=0`). Воркеры очередей и Octane: конфиги supervisor в `/etc/supervisor/custom.d`, перезапуск `docker compose exec <сервис> supervisorctl restart <имя>` |
-| Node | 3000 | Dev-сервер должен слушать `0.0.0.0`. `node_modules` держится в томе: симлинки pnpm не работают на общих папках |
-| Go | 8000 | Запускается `air`; настройки в `.air.toml` проекта |
-| Python | 8000 | Свои зависимости ставить в `.venv` проекта: `python -m venv --system-site-packages .venv` (на общей папке добавить `--copies`), в команде `.venv/bin/python -m uvicorn` |
-| Java | 8080 | Запускается `mvn spring-boot:run`; образец на реальном проекте не проверялся |
+| PHP | 8080 | Code is mounted at `/var/www/html`. For Laravel/Symfony (web root in `public/`) put `examples/php/nginx.conf` into the project and uncomment its mount. Code changes are visible on the next request (`opcache.revalidate_freq=0`). Queue workers and Octane: supervisor configs in `/etc/supervisor/custom.d`, restart with `docker compose exec <service> supervisorctl restart <name>` |
+| Node | 3000 | The dev server must listen on `0.0.0.0`. `node_modules` is kept in a volume: pnpm symlinks do not work on shared folders |
+| Go | 8000 | Started with `air`; settings in the project's `.air.toml` |
+| Python | 8000 | Install project dependencies into the project's `.venv`: `python -m venv --system-site-packages .venv` (add `--copies` on a shared folder), and use `.venv/bin/python -m uvicorn` in the command |
+| Java | 8080 | Started with `mvn spring-boot:run`; the sample has not been tested on a real project |
 
 ### Hot reload
 
-WebSocket через Traefik работает без настроек. Dev-сервер должен разрешать свой домен:
-`server.allowedHosts` в vite, `allowedDevOrigins` в next.
+WebSocket through Traefik works without extra settings. The dev server must allow its own domain:
+`server.allowedHosts` in vite, `allowedDevOrigins` in next.
 
-На общих папках (vboxsf, диск Windows в WSL) события изменения файлов не приходят, нужен режим опроса:
+On shared folders (vboxsf, a Windows drive in WSL) file change events do not arrive, so polling is needed:
 `WATCHPACK_POLLING=true` (next/webpack), `CHOKIDAR_USEPOLLING=true`, `server.watch.usePolling` (vite),
-`poll = true` в `.air.toml` (air), `WATCHFILES_FORCE_POLLING=true` (uvicorn).
+`poll = true` in `.air.toml` (air), `WATCHFILES_FORCE_POLLING=true` (uvicorn).
 
-## Сертификаты
+## Certificates
 
-- Локальный центр сертификации и сертификат лежат в `storage/Traefik/certs`.
-- `rootCA.pem` устанавливается в доверенные на каждой машине, с которой открывают сайты.
-- `rootCA-key.pem` никому не передавать: им можно подписать сертификат для любого сайта.
-- Перевыпуск после правки `mkcert-hosts.txt`: `docker compose run --rm mkcert`. Traefik подхватит новый сертификат сам, центр сертификации остаётся прежним.
-- Wildcard на зону первого уровня (`*.alp`) браузеры не принимают, поэтому хосты перечисляются явно.
+- The local certificate authority and the certificate are in `storage/Traefik/certs`.
+- `rootCA.pem` is installed as trusted on every machine that opens the sites.
+- Never share `rootCA-key.pem`: it can sign a certificate for any site.
+- Reissue after editing `mkcert-hosts.txt`: `docker compose run --rm mkcert`. Traefik picks up the new certificate on its own; the certificate authority stays the same.
+- Browsers do not accept a wildcard for a top-level zone (`*.alp`), so hosts are listed explicitly.
 
-## Данные и перенос
+## Data and migration
 
-Список томов: `docker volume ls`, имя тома: `<COMPOSE_PROJECT_NAME>_<том>`.
+List of volumes: `docker volume ls`; a volume is named `<COMPOSE_PROJECT_NAME>_<volume>`.
 
-Базы надёжнее переносить дампом. Каталог `storage/PgSQL/tmp` виден в контейнере как `/var/tmp-l`:
+Databases are best moved as dumps. The `storage/PgSQL/tmp` directory is visible in the container as `/var/tmp-l`:
 
 ```sh
 docker compose exec postgres sh -c 'pg_dump -U pgsql -Fc shop > /var/tmp-l/shop.dump'
 docker compose exec postgres pg_restore -U pgsql -d shop /var/tmp-l/shop.dump
 ```
 
-Остальные тома: архивом.
+Other volumes: as an archive.
 
 ```sh
 docker run --rm -v devkit_forgejo_data:/v -v "$PWD":/b alpine tar czf /b/forgejo_data.tgz -C /v .
 docker run --rm -v devkit_forgejo_data:/v -v "$PWD":/b alpine tar xzf /b/forgejo_data.tgz -C /v
 ```
 
-Перенос на другую машину: скопировать каталог окружения с `.env` и `docker-compose.override.yml`,
-перенести нужные тома, выполнить `docker compose up -d`. Если uid/gid другие:
-поправить `USER_ID`, `GROUP_ID`, `SHARED_GID` и выполнить `sudo chown -R <uid>:<gid> storage`.
+Moving to another machine: copy the environment directory together with `.env` and `docker-compose.override.yml`,
+move the volumes you need, and run `docker compose up -d`. If the uid/gid differ:
+update `USER_ID`, `GROUP_ID`, `SHARED_GID` and run `sudo chown -R <uid>:<gid> storage`.
 
-Полное удаление вместе с данными: `docker compose --profile '*' down -v`.
+Removing everything including data: `docker compose --profile '*' down -v`.
 
-## Первичная настройка сервисов
+## First-time service setup
 
-**PostgreSQL.** Суперпользователь и пароль: `PGSQL_ROOT_USER`, `PGSQL_ROOT_PASSWORD`.
-Файлы `*.sql` и `*.sh` из `storage/PgSQL/init` выполняются один раз, при создании пустой базы.
+**PostgreSQL.** Superuser and password: `PGSQL_ROOT_USER`, `PGSQL_ROOT_PASSWORD`.
+`*.sql` and `*.sh` files from `storage/PgSQL/init` run once, when an empty database is created.
 
-**Garage.** Один раз назначить раскладку узла, затем создавать ключи и бакеты в `https://garage.<DOMAIN>`:
+**Garage.** Assign the node layout once, then create keys and buckets at `https://garage.<DOMAIN>`:
 
 ```sh
-docker compose exec garage /garage status                            # взять ID узла
+docker compose exec garage /garage status                            # take the node ID
 docker compose exec garage /garage layout assign -z dc1 -c 10G <node_id>
 docker compose exec garage /garage layout apply --version 1
 ```
 
-**Forgejo.** Регистрация закрыта, администратор создаётся командой:
+**Forgejo.** Registration is closed; the administrator is created with a command:
 
 ```sh
 docker compose exec forgejo forgejo admin user create --admin --username <user> --email <email> --random-password
 ```
 
-**forgejo-mcp.** Создать токен в Forgejo, вписать в `FORGEJOMCP_TOKEN`, добавить профиль `git-mcp`.
-Адрес: `https://git.<DOMAIN>/_mcp/<GIT_MCP_PATH_KEY>`.
+**forgejo-mcp.** Create a token in Forgejo, put it into `FORGEJOMCP_TOKEN`, and add the `git-mcp` profile.
+Address: `https://git.<DOMAIN>/_mcp/<GIT_MCP_PATH_KEY>`.
 
-## Особенности платформ
+## Platform notes
 
-| Платформа | Что учесть |
+| Platform | What to keep in mind |
 |---|---|
-| Linux | Работает как есть. Контейнеры Node, Go, Python и Java работают от root: созданные ими файлы в папке проекта принадлежат root |
-| Linux в VirtualBox, код на vboxsf | `SHARED_GID` = gid группы `vboxsf` (`init.sh` определяет сам). Нужен режим опроса для hot reload |
-| macOS (Docker Desktop) | Работает как есть, включая Apple Silicon: у всех образов есть сборка arm64 |
-| Windows | Окружение и код держать внутри WSL, не на диске `C:`. Иначе: медленно, нет симлинков, нужен режим опроса |
+| Linux | Works as is. Node, Go, Python and Java containers run as root: files they create in the project folder are owned by root |
+| Linux in VirtualBox, code on vboxsf | `SHARED_GID` = the gid of the `vboxsf` group (`init.sh` detects it). Hot reload needs polling |
+| macOS (Docker Desktop) | Works as is, including Apple Silicon: every image has an arm64 build |
+| Windows | Keep the environment and the code inside WSL, not on the `C:` drive. Otherwise: slow, no symlinks, polling required |
 
-## Команды
+## Commands
 
 ```sh
-docker compose up -d                      # применить изменения compose и .env
-docker compose up -d --build              # то же и пересобрать образы после правки Dockerfile
-docker compose up -d --remove-orphans     # то же и убрать контейнеры отключённых проектов
-docker compose logs -f --tail 100 shop    # логи сервиса
-docker compose ps                         # состояние
-docker compose config                     # итоговый конфиг со всеми проектами
-docker compose down                       # остановить, данные остаются
-docker compose exec shop sh               # shell в контейнере
+docker compose up -d                      # apply changes to compose and .env
+docker compose up -d --build              # same, and rebuild images after editing a Dockerfile
+docker compose up -d --remove-orphans     # same, and remove containers of disconnected projects
+docker compose logs -f --tail 100 shop    # service logs
+docker compose ps                         # status
+docker compose config                     # the resulting config with all projects
+docker compose down                       # stop; data is kept
+docker compose exec shop sh               # a shell in the container
 ```
 
-## Изоляция от других стеков
+## Isolation from other stacks
 
-Окружение не пересекается с другими compose-проектами и контейнерами на той же машине:
+The environment does not overlap with other compose projects and containers on the same machine:
 
-| Ресурс | Как изолирован |
+| Resource | How it is isolated |
 |---|---|
-| Контейнеры | имена с префиксом `CONTAINER_PREFIX` (инфраструктура) и `COMPOSE_PROJECT_NAME` (проекты) |
-| Тома, образы, сеть | имена с префиксом `COMPOSE_PROJECT_NAME` |
-| Подсеть | `init.sh` выбирает `172.x.0.0/16`, не занятую другими сетями Docker |
-| Роутинг | Traefik обслуживает только контейнеры с меткой `devenv.traefik=<проект>`. Метки `traefik.enable=true` у контейнеров нет, поэтому чужой Traefik их не подхватывает |
-| Порты хоста | единственное, что делится между стеками. `init.sh` предупреждает, если 80, 443, 5432 или 6379 уже опубликованы другим контейнером; порт меняется в `.env` |
+| Containers | names prefixed with `CONTAINER_PREFIX` (infrastructure) and `COMPOSE_PROJECT_NAME` (projects) |
+| Volumes, images, network | names prefixed with `COMPOSE_PROJECT_NAME` |
+| Subnet | `init.sh` picks a `172.x.0.0/16` that no other Docker network uses |
+| Routing | Traefik serves only containers labelled `devenv.traefik=<project>`. The containers carry no `traefik.enable=true` label, so a foreign Traefik does not pick them up |
+| Host ports | the only thing shared between stacks. `init.sh` warns if 80, 443, 5432 or 6379 is already published by another container; the port is changed in `.env` |
 
-При нестандартном `HTTPS_PORT` адреса получают порт: `https://traefik.alp:8443/dashboard/`.
+With a non-default `HTTPS_PORT` the addresses include the port: `https://traefik.alp:8443/dashboard/`.
 
-Второй экземпляр окружения на той же машине: другой каталог, другие `COMPOSE_PROJECT_NAME`,
-`CONTAINER_PREFIX` и порты; подсеть `init.sh` подберёт сам.
+A second copy of the environment on the same machine: another directory, different `COMPOSE_PROJECT_NAME`,
+`CONTAINER_PREFIX` and ports; `init.sh` picks the subnet itself.
 
-Чего `init.sh` не видит: порты, занятые программами вне Docker, и подсети VPN.
-В этих случаях `docker compose up` сообщит об ошибке, значения правятся в `.env`.
+What `init.sh` cannot see: ports taken by programs outside Docker, and VPN subnets.
+In those cases `docker compose up` reports an error and the values are fixed in `.env`.
 
-## Ограничения
+## Limitations
 
-- Только для разработки. Traefik и Portainer имеют доступ к сокету Docker; порты Postgres и Redis открыты на всех интерфейсах, Redis без пароля. Не запускать на машине, доступной из недоверенной сети.
-- Системные пакеты образов (`apk`, `apt`) ставятся из репозиториев на момент сборки. Для побитно одинаковых образов на разных машинах собрать один раз и переносить через реестр или `docker save`.
-- Образы рантаймов проверяются на актуальность при каждом `docker compose up` (из кэша это секунды; первая сборка PHP занимает несколько минут).
+- For development only. Traefik and Portainer have access to the Docker socket; the Postgres and Redis ports are open on all interfaces, and Redis has no password. Do not run it on a machine reachable from an untrusted network.
+- System packages in the images (`apk`, `apt`) are installed from the repositories at build time. For bit-identical images on different machines, build once and distribute through a registry or `docker save`.
+- Runtime images are checked for freshness on every `docker compose up` (seconds from cache; the first PHP build takes several minutes).
